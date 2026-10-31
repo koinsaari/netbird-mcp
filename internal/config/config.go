@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"strings"
 )
@@ -52,8 +53,19 @@ func validateURL(raw string) (string, error) {
 	if u.Hostname() == "" {
 		return "", errors.New("host is required")
 	}
+	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
+		return "", errors.New("http is only allowed for localhost; use https")
+	}
 	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
 		return "", errors.New("must not contain a query or fragment")
 	}
 	return strings.TrimRight(raw, "/"), nil
+}
+
+func isLoopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	addr, err := netip.ParseAddr(host)
+	return err == nil && addr.IsLoopback()
 }

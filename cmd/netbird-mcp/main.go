@@ -2,24 +2,39 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/koinsaari/netbird-mcp/internal/config"
+	"github.com/koinsaari/netbird-mcp/internal/netbird"
+	"github.com/koinsaari/netbird-mcp/internal/tools"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := run(ctx, os.Args[1:], os.Getenv, &mcp.StdioTransport{}, os.Stdout, os.Stderr)
+	stop()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "netbird-mcp:", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string, stdout, stderr io.Writer) error {
+func run(ctx context.Context, args []string, getenv func(string) string, transport mcp.Transport, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("netbird-mcp", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print version and exit")
@@ -33,6 +48,24 @@ func run(args []string, stdout, stderr io.Writer) error {
 		_, err := fmt.Fprintf(stdout, "netbird-mcp %s\n", version)
 		return err
 	}
-	_, err := fmt.Fprintln(stderr, "netbird-mcp: no tools yet")
-	return err
+
+	cfg, err := config.Load(getenv)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	logger := slog.New(slog.NewTextHandler(stderr, nil))
+	hc := &http.Client{
+		Timeout: 30 * time.Second,
+		// A redirect could forward the Authorization header elsewhere.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	server := mcp.NewServer(&mcp.Implementation{Name: "netbird-mcp", Version: version}, &mcp.ServerOptions{Logger: logger})
+	tools.Register(server, netbird.New(cfg.APIURL, cfg.Token, hc), logger)
+
+	err = server.Run(ctx, transport)
+	if err == nil || errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return fmt.Errorf("run server: %w", err)
 }

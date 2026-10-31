@@ -55,6 +55,21 @@ func TestLoad(t *testing.T) {
 			wantErr: "host is required",
 		},
 		{
+			name: "http localhost allowed",
+			env:  map[string]string{"NETBIRD_TOKEN": sentinelToken, "NETBIRD_API_URL": "http://localhost:8080/api"},
+			want: Config{APIURL: "http://localhost:8080/api", Token: sentinelToken},
+		},
+		{
+			name: "http loopback ip allowed",
+			env:  map[string]string{"NETBIRD_TOKEN": sentinelToken, "NETBIRD_API_URL": "http://[::1]:8080/api"},
+			want: Config{APIURL: "http://[::1]:8080/api", Token: sentinelToken},
+		},
+		{
+			name:    "http remote rejected",
+			env:     map[string]string{"NETBIRD_TOKEN": sentinelToken, "NETBIRD_API_URL": "http://nb.example.com/api"},
+			wantErr: "http is only allowed for localhost",
+		},
+		{
 			name:    "port without host",
 			env:     map[string]string{"NETBIRD_TOKEN": sentinelToken, "NETBIRD_API_URL": "https://:8443/api"},
 			wantErr: "host is required",

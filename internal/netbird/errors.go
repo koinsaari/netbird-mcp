@@ -25,7 +25,7 @@ func newAPIError(resp *http.Response, token string) *APIError {
 	var body struct {
 		Message string `json:"message"`
 	}
-	// Best effort: any read or decode failure falls back to the status text.
+	// Any read or decode failure falls back to the status text.
 	if err := json.UnmarshalRead(io.LimitReader(resp.Body, maxErrorBodySize), &body); err != nil {
 		body.Message = ""
 	}
@@ -38,7 +38,8 @@ func newAPIError(resp *http.Response, token string) *APIError {
 }
 
 // sanitize strips control and invisible characters, redacts the token and caps
-// the length. Redaction runs after stripping so a split token is still caught.
+// the length. Redaction runs after stripping, so a token split by a control
+// character is still caught.
 func sanitize(msg, token string) string {
 	msg = strings.Map(func(r rune) rune {
 		switch {
