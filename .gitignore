@@ -1,0 +1,10 @@
+/netbird-mcp
+/dist/
+.env*
+coverage.out
+*.test
+.idea/
+.vscode/
+.DS_Store
+.claude/settings.local.json
+docs/specs/
