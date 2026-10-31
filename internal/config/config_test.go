@@ -55,6 +55,11 @@ func TestLoad(t *testing.T) {
 			wantErr: "host is required",
 		},
 		{
+			name:    "port without host",
+			env:     map[string]string{"NETBIRD_TOKEN": sentinelToken, "NETBIRD_API_URL": "https://:8443/api"},
+			wantErr: "host is required",
+		},
+		{
 			name:    "unparsable",
 			env:     map[string]string{"NETBIRD_TOKEN": sentinelToken, "NETBIRD_API_URL": "://bad"},
 			wantErr: "invalid NETBIRD_API_URL",

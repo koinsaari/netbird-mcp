@@ -49,7 +49,7 @@ func validateURL(raw string) (string, error) {
 	if u.User != nil {
 		return "", errors.New("must not contain credentials")
 	}
-	if u.Host == "" {
+	if u.Hostname() == "" {
 		return "", errors.New("host is required")
 	}
 	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
