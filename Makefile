@@ -1,6 +1,7 @@
-.PHONY: test lint build run tidy
+.PHONY: test lint build vuln run tidy
 
 GO ?= go
+GOVULNCHECK_VERSION ?= v1.9.0
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 test:
@@ -11,6 +12,9 @@ lint:
 
 build:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o dist/netbird-mcp ./cmd/netbird-mcp
+
+vuln:
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 run:
 	$(GO) run ./cmd/netbird-mcp
