@@ -1,0 +1,33 @@
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: saturday
+    cooldown:
+      default-days: 7
+    groups:
+      go-dependencies:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: saturday
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - area:ci

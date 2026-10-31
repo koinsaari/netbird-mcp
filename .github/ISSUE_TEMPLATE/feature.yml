@@ -1,0 +1,37 @@
+name: Feature
+description: New MCP tool, NetBird API coverage, or behavior change.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences. What should exist that doesn't?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What problem does this solve? Which NetBird API endpoint or resource is involved?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in and out of scope? Read-only or does it write?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: How do we know it's done? Bullet list.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: References, prior art, design considerations.
