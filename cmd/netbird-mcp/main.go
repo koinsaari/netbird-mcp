@@ -26,6 +26,8 @@ var version = "dev"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// After the first signal, restore default handling so a second one kills the process.
+	context.AfterFunc(ctx, stop)
 	err := run(ctx, os.Args[1:], os.Getenv, &mcp.StdioTransport{}, os.Stdout, os.Stderr)
 	stop()
 	if err != nil {

@@ -63,7 +63,7 @@ func validateURL(raw string) (string, error) {
 }
 
 func isLoopback(host string) bool {
-	if host == "localhost" {
+	if strings.EqualFold(strings.TrimSuffix(host, "."), "localhost") {
 		return true
 	}
 	addr, err := netip.ParseAddr(host)

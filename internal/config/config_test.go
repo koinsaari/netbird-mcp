@@ -65,6 +65,11 @@ func TestLoad(t *testing.T) {
 			want: Config{APIURL: "http://[::1]:8080/api", Token: sentinelToken},
 		},
 		{
+			name: "http localhost any case allowed",
+			env:  map[string]string{"NETBIRD_TOKEN": sentinelToken, "NETBIRD_API_URL": "http://LocalHost.:8080/api"},
+			want: Config{APIURL: "http://LocalHost.:8080/api", Token: sentinelToken},
+		},
+		{
 			name:    "http remote rejected",
 			env:     map[string]string{"NETBIRD_TOKEN": sentinelToken, "NETBIRD_API_URL": "http://nb.example.com/api"},
 			wantErr: "http is only allowed for localhost",

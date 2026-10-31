@@ -118,11 +118,13 @@ func TestListPeersAPIError(t *testing.T) {
 		{name: "html body", status: 502, contentType: "text/html", body: "<html>bad gateway</html>", wantMessage: "Bad Gateway"},
 		{name: "empty body", status: 500, body: "", wantMessage: "Internal Server Error"},
 		{name: "empty message", status: 401, contentType: "application/json", body: `{"message":""}`, wantMessage: "Unauthorized"},
-		{name: "token echoed", status: 400, contentType: "application/json", body: `{"message":"bad token nbp_SENTINEL here"}`, wantMessage: "bad token [REDACTED] here"},
+		{name: "token echoed", status: 400, contentType: "application/json", body: `{"message":"bad token nbp_SENTINEL here"}`, wantMessage: "Bad Request"},
 		{name: "control chars stripped", status: 400, contentType: "application/json", body: `{"message":"a\u0000b\nc"}`, wantMessage: "ab c"},
 		{name: "whitespace collapsed", status: 400, contentType: "application/json", body: `{"message":"invalid ip\n\texpected  IPv4"}`, wantMessage: "invalid ip expected IPv4"},
 		{name: "format chars dropped", status: 400, contentType: "application/json", body: `{"message":"a\u202eb\u200bc"}`, wantMessage: "abc"},
-		{name: "token split by control char", status: 400, contentType: "application/json", body: `{"message":"bad nbp_\u0000SENTINEL"}`, wantMessage: "bad [REDACTED]"},
+		{name: "token split by control char", status: 400, contentType: "application/json", body: `{"message":"bad nbp_\u0000SENTINEL"}`, wantMessage: "Bad Request"},
+		{name: "token split by tab", status: 400, contentType: "application/json", body: `{"message":"bad nbp_SEN\tTINEL"}`, wantMessage: "Bad Request"},
+		{name: "token split by space", status: 400, contentType: "application/json", body: `{"message":"bad nbp_SEN TINEL"}`, wantMessage: "Bad Request"},
 		{name: "long message capped", status: 400, contentType: "application/json", body: `{"message":"` + strings.Repeat("x", 2000) + `"}`, wantMessage: strings.Repeat("x", maxMessageLen)},
 	}
 	for _, tt := range tests {
@@ -176,7 +178,7 @@ func TestListPeersFailures(t *testing.T) {
 			},
 			check: func(t *testing.T, err error) {
 				t.Helper()
-				if !strings.Contains(err.Error(), "decode response: invalid JSON") {
+				if !strings.Contains(err.Error(), "decode response: response is not JSON") {
 					t.Errorf("err = %v, want invalid JSON", err)
 				}
 			},

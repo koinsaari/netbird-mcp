@@ -7,9 +7,12 @@ import (
 )
 
 // toolMessage returns the error text plus a hint for known API statuses.
-// Client errors are safe to show because the token is redacted and URLs are dropped.
+// Client errors are safe to show because the token is never included and URLs are dropped.
 func toolMessage(err error) string {
 	msg := err.Error()
+	if errors.Is(err, netbird.ErrNotJSON) {
+		return msg + " (hint: check NETBIRD_API_URL points at the NetBird API, usually ending in /api)"
+	}
 	if apiErr, ok := errors.AsType[*netbird.APIError](err); ok {
 		if hint := apiHint(apiErr.Status); hint != "" {
 			msg += " (hint: " + hint + ")"
@@ -28,6 +31,8 @@ func apiHint(status int) string {
 		return "check the arguments"
 	case 301, 302, 303, 307, 308:
 		return "server redirected; check NETBIRD_API_URL"
+	case 404:
+		return "not found; check the ID or NETBIRD_API_URL"
 	case 429:
 		return "rate limited, retry later"
 	}

@@ -12,6 +12,10 @@ import (
 	"net/url"
 )
 
+// ErrNotJSON means a 2xx response body was not JSON, which usually means the
+// base URL points at something other than the NetBird API.
+var ErrNotJSON = errors.New("response is not JSON")
+
 const (
 	defaultMaxBodySize = 32 << 20
 	maxErrorBodySize   = 64 << 10
@@ -99,5 +103,5 @@ func (c *Client) decodeError(err error) error {
 	if semErr, ok := errors.AsType[*json.SemanticError](err); ok {
 		return fmt.Errorf("decode response: cannot decode JSON %s into %v", semErr.JSONKind, semErr.GoType)
 	}
-	return errors.New("decode response: invalid JSON")
+	return fmt.Errorf("decode response: %w", ErrNotJSON)
 }

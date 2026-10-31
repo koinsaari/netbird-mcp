@@ -37,10 +37,13 @@ func newAPIError(resp *http.Response, token string) *APIError {
 	return &APIError{Status: resp.StatusCode, Message: msg}
 }
 
-// sanitize strips control and invisible characters, redacts the token and caps
-// the length. Redaction runs after stripping, so a token split by a control
-// character is still caught.
+// sanitize strips control and invisible characters and caps the length. A
+// message that contains the token in any form is dropped entirely, because
+// partial redaction can be fooled by splitting the token.
 func sanitize(msg, token string) string {
+	if token != "" && strings.Contains(squash(msg), token) {
+		return ""
+	}
 	msg = strings.Map(func(r rune) rune {
 		switch {
 		case unicode.IsSpace(r):
@@ -51,11 +54,17 @@ func sanitize(msg, token string) string {
 		return r
 	}, msg)
 	msg = strings.Join(strings.Fields(msg), " ")
-	if token != "" {
-		msg = strings.ReplaceAll(msg, token, "[REDACTED]")
-	}
 	if len(msg) > maxMessageLen {
 		msg = strings.ToValidUTF8(msg[:maxMessageLen], "")
 	}
 	return strings.TrimSpace(msg)
+}
+
+func squash(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s)
 }
