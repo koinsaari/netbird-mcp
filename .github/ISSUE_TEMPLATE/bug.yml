@@ -1,0 +1,58 @@
+name: Bug
+description: A tool is broken or behaving incorrectly.
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences. What is broken?
+    validations:
+      required: true
+  - type: input
+    id: tool
+    attributes:
+      label: Tool name
+      description: The MCP tool involved, e.g. list_peers.
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: NetBird deployment
+      options:
+        - Cloud (api.netbird.io)
+        - Self-hosted
+    validations:
+      required: true
+  - type: input
+    id: netbird-version
+    attributes:
+      label: NetBird version
+      description: Management server version (self-hosted) or "cloud".
+    validations:
+      required: true
+  - type: input
+    id: mcp-client
+    attributes:
+      label: MCP client
+      description: Client and version, e.g. Claude Desktop 1.2.3.
+    validations:
+      required: true
+  - type: input
+    id: server-version
+    attributes:
+      label: netbird-mcp version
+      description: Output of `netbird-mcp --version` or the release tag.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Expected behavior
+      description: How do we know it's fixed? Bullet list.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Logs and tool output, anything else. Redact your API token.
