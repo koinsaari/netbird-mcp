@@ -44,7 +44,7 @@ func (c *Client) get(ctx context.Context, out any, query url.Values, segments ..
 	}
 	u, err := url.JoinPath(c.baseURL, escaped...)
 	if err != nil {
-		return fmt.Errorf("build url: %w", err)
+		return fmt.Errorf("build url: %w", stripURL(err))
 	}
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -52,14 +52,15 @@ func (c *Client) get(ctx context.Context, out any, query url.Values, segments ..
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return fmt.Errorf("build request: %w", stripURL(err))
 	}
 	req.Header.Set("Authorization", "Token "+c.token)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("send request: %w", err)
+		// url.Error text embeds the full URL, including query args.
+		return fmt.Errorf("send request: %w", stripURL(err))
 	}
 	defer resp.Body.Close()
 
@@ -72,6 +73,14 @@ func (c *Client) get(ctx context.Context, out any, query url.Values, segments ..
 		return c.decodeError(err)
 	}
 	return nil
+}
+
+// stripURL drops the URL (and its query args) that *url.Error adds to its text.
+func stripURL(err error) error {
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
+		return urlErr.Err
+	}
+	return err
 }
 
 // decodeError gives JSON errors fixed text: decoder messages can quote the response.

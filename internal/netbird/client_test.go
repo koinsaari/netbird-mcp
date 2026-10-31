@@ -317,3 +317,43 @@ func TestListPeersTimeoutMidBody(t *testing.T) {
 		t.Fatalf("err = %v, want a timeout", err)
 	}
 }
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestListPeersTransportErrorOmitsQuery(t *testing.T) {
+	tests := []struct {
+		name  string
+		cause error
+		check func(t *testing.T, err error)
+	}{
+		{"timeout", context.DeadlineExceeded, func(t *testing.T, err error) {
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Errorf("errors.Is(DeadlineExceeded) = false for %v", err)
+			}
+		}},
+		{"refused", &net.OpError{Op: "dial", Err: errors.New("connection refused")}, func(t *testing.T, err error) {
+			if _, ok := errors.AsType[net.Error](err); !ok {
+				t.Errorf("errors.AsType[net.Error] failed for %v", err)
+			}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			hc := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return nil, tt.cause
+			})}
+			c := New("http://example.invalid/api", sentinelToken, hc)
+			_, err := c.ListPeers(t.Context(), ListPeersParams{Name: "secretname"})
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if strings.Contains(err.Error(), "secretname") || strings.Contains(err.Error(), "?") {
+				t.Errorf("error leaks query: %q", err)
+			}
+			tt.check(t, err)
+		})
+	}
+}
