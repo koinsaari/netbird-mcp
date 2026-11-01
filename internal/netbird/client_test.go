@@ -79,12 +79,13 @@ func TestListPeersDecode(t *testing.T) {
 			name: "peer with unknown fields",
 			body: `[{"id":"chacbco6lnnbn6cg5s90","name":"laptop","hostname":"host1","dns_label":"laptop.netbird.cloud",
 				"ip":"100.64.0.1","connected":true,"last_seen":"2026-10-31T10:00:00Z","os":"Darwin","version":"0.60.0",
-				"groups":[{"id":"g1","name":"All","peers_count":3}],"user_id":"u1","login_expired":false,
-				"approval_required":true,"kernel_version":"24.0","geoname_id":1}]`,
+				"groups":[{"id":"g1","name":"All","peers_count":3,"future_group_field":true}],"user_id":"u1","login_expired":false,
+				"approval_required":true,"kernel_version":"24.0","geoname_id":1,"future_field":{"x":1}}]`,
 			want: []Peer{{
 				ID: "chacbco6lnnbn6cg5s90", Name: "laptop", Hostname: "host1", DNSLabel: "laptop.netbird.cloud",
 				IP: "100.64.0.1", Connected: true, LastSeen: "2026-10-31T10:00:00Z", OS: "Darwin", Version: "0.60.0",
-				Groups: []Group{{ID: "g1", Name: "All"}}, UserID: "u1", ApprovalRequired: true,
+				Groups: []Group{{ID: "g1", Name: "All", PeersCount: 3}}, UserID: "u1", ApprovalRequired: true,
+				KernelVersion: "24.0", GeonameID: 1,
 			}},
 		},
 	}
@@ -152,6 +153,136 @@ func TestListPeersAPIError(t *testing.T) {
 				t.Errorf("err leaks token: %q", err)
 			}
 		})
+	}
+}
+
+func TestGetPeerRequest(t *testing.T) {
+	t.Parallel()
+	var got *http.Request
+	c := newTestClient(t, "/api", func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		_, _ = w.Write([]byte("{}"))
+	})
+	if _, err := c.GetPeer(t.Context(), "chacbco6lnnbn6cg5s90"); err != nil {
+		t.Fatalf("GetPeer: %v", err)
+	}
+	if got.Method != http.MethodGet {
+		t.Errorf("method = %s, want GET", got.Method)
+	}
+	if got.URL.Path != "/api/peers/chacbco6lnnbn6cg5s90" {
+		t.Errorf("path = %q", got.URL.Path)
+	}
+	if h := got.Header.Get("Authorization"); h != "Token "+sentinelToken {
+		t.Errorf("Authorization = %q", h)
+	}
+	if h := got.Header.Get("Accept"); h != "application/json" {
+		t.Errorf("Accept = %q", h)
+	}
+}
+
+func TestGetPeerDecodeFull(t *testing.T) {
+	t.Parallel()
+	c := newTestClient(t, "/api", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"chacbco6lnnbn6cg5s90","name":"laptop","created_at":"2026-01-01T00:00:00Z",
+			"ip":"100.64.0.1","ipv6":"fd00::1","network_addresses":[{"net_ip":"192.168.0.11/24","mac":"00:93:37:bd:83:0f"}],
+			"connection_ip":"35.64.0.1","connected":true,"last_seen":"2026-10-31T10:00:00Z","os":"Darwin 13.2.1",
+			"kernel_version":"23.2.0","geoname_id":2643743,"version":"0.60.0",
+			"groups":[{"id":"g1","name":"All","peers_count":3,"resources_count":5,"issued":"api"}],
+			"ssh_enabled":true,"user_id":"u1","hostname":"host1","ui_version":"0.61.0","dns_label":"laptop.netbird.cloud",
+			"login_expiration_enabled":true,"login_expired":false,"last_login":"2026-01-02T00:00:00Z",
+			"inactivity_expiration_enabled":true,"approval_required":true,"disapproval_reason":"unknown device",
+			"country_code":"DE","city_name":"Berlin","serial_number":"C02XJ0J0JGH7","extra_dns_labels":["alias"],
+			"ephemeral":true,"local_flags":{"rosenpass_enabled":true,"rosenpass_permissive":true,"server_ssh_allowed":true,
+			"remote_jobs_allowed":true,"disable_client_routes":true,"disable_server_routes":true,"disable_dns":true,
+			"disable_firewall":true,"block_lan_access":true,"block_inbound":true,"lazy_connection_enabled":true}}`))
+	})
+	got, err := c.GetPeer(t.Context(), "chacbco6lnnbn6cg5s90")
+	if err != nil {
+		t.Fatalf("GetPeer: %v", err)
+	}
+	tr := true
+	want := Peer{
+		ID: "chacbco6lnnbn6cg5s90", Name: "laptop", CreatedAt: "2026-01-01T00:00:00Z",
+		IP: "100.64.0.1", IPv6: "fd00::1",
+		NetworkAddresses: []NetworkAddress{{NetIP: "192.168.0.11/24", MAC: "00:93:37:bd:83:0f"}},
+		ConnectionIP:     "35.64.0.1", Connected: true, LastSeen: "2026-10-31T10:00:00Z", OS: "Darwin 13.2.1",
+		KernelVersion: "23.2.0", GeonameID: 2643743, Version: "0.60.0",
+		Groups:     []Group{{ID: "g1", Name: "All", PeersCount: 3, ResourcesCount: 5, Issued: "api"}},
+		SSHEnabled: true, UserID: "u1", Hostname: "host1", UIVersion: "0.61.0", DNSLabel: "laptop.netbird.cloud",
+		LoginExpirationEnabled: true, LastLogin: "2026-01-02T00:00:00Z", InactivityExpirationEnabled: true,
+		ApprovalRequired: true, DisapprovalReason: "unknown device", CountryCode: "DE", CityName: "Berlin",
+		SerialNumber: "C02XJ0J0JGH7", ExtraDNSLabels: []string{"alias"}, Ephemeral: true,
+		LocalFlags: &PeerLocalFlags{
+			RosenpassEnabled: &tr, RosenpassPermissive: &tr, ServerSSHAllowed: &tr, RemoteJobsAllowed: &tr,
+			DisableClientRoutes: &tr, DisableServerRoutes: &tr, DisableDNS: &tr, DisableFirewall: &tr,
+			BlockLANAccess: &tr, BlockInbound: &tr, LazyConnectionEnabled: &tr,
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestGetPeerDecodeOptionalAbsent(t *testing.T) {
+	t.Parallel()
+	c := newTestClient(t, "/api", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"p1","ip":"100.64.0.1","groups":[],"extra_dns_labels":[]}`))
+	})
+	got, err := c.GetPeer(t.Context(), "p1")
+	if err != nil {
+		t.Fatalf("GetPeer: %v", err)
+	}
+	if got.LocalFlags != nil {
+		t.Errorf("LocalFlags = %+v, want nil", got.LocalFlags)
+	}
+	if got.NetworkAddresses != nil {
+		t.Errorf("NetworkAddresses = %+v, want nil", got.NetworkAddresses)
+	}
+	if got.IPv6 != "" || got.DisapprovalReason != "" {
+		t.Errorf("IPv6 = %q, DisapprovalReason = %q, want empty", got.IPv6, got.DisapprovalReason)
+	}
+}
+
+func TestGetPeerLocalFlagFalseVsAbsent(t *testing.T) {
+	t.Parallel()
+	c := newTestClient(t, "/api", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"p1","local_flags":{"block_inbound":false}}`))
+	})
+	got, err := c.GetPeer(t.Context(), "p1")
+	if err != nil {
+		t.Fatalf("GetPeer: %v", err)
+	}
+	if got.LocalFlags == nil {
+		t.Fatal("LocalFlags = nil, want non-nil")
+	}
+	if got.LocalFlags.BlockInbound == nil || *got.LocalFlags.BlockInbound {
+		t.Errorf("BlockInbound = %v, want pointer to false", got.LocalFlags.BlockInbound)
+	}
+	if got.LocalFlags.DisableDNS != nil {
+		t.Errorf("DisableDNS = %v, want nil", got.LocalFlags.DisableDNS)
+	}
+}
+
+func TestGetPeerNotFound(t *testing.T) {
+	t.Parallel()
+	c := newTestClient(t, "/api", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"peer not found nbp_SENTINEL","code":404}`))
+	})
+	_, err := c.GetPeer(t.Context(), "chacbco6lnnbn6cg5s90")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %v, want *APIError", err)
+	}
+	if apiErr.Status != http.StatusNotFound {
+		t.Errorf("Status = %d, want 404", apiErr.Status)
+	}
+	if strings.Contains(err.Error(), sentinelToken) {
+		t.Errorf("err leaks token: %q", err)
+	}
+	if !strings.HasPrefix(err.Error(), "get peer: ") {
+		t.Errorf("err = %q, want get peer prefix", err)
 	}
 }
 
