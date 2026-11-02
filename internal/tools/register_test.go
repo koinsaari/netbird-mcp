@@ -40,11 +40,18 @@ func (f *fakePeerAPI) GetPeer(_ context.Context, id string) (netbird.Peer, error
 
 func connect(t *testing.T, f *fakePeerAPI) (*mcp.ClientSession, *bytes.Buffer) {
 	t.Helper()
-	return connectClient(t, f)
+	return connectClient(t, f, nil)
 }
 
-func connectClient(t *testing.T, c Client) (*mcp.ClientSession, *bytes.Buffer) {
+// fakeClient combines one fake per resource into a Client.
+type fakeClient struct {
+	peerAPI
+	groupAPI
+}
+
+func connectClient(t *testing.T, p peerAPI, g groupAPI) (*mcp.ClientSession, *bytes.Buffer) {
 	t.Helper()
+	c := fakeClient{peerAPI: p, groupAPI: g}
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "v0"}, &mcp.ServerOptions{Logger: logger})
@@ -219,7 +226,7 @@ func TestGetPeerTool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			cs, logs := connectClient(t, tt.getter)
+			cs, logs := connectClient(t, tt.getter, nil)
 			res, text := callTool(t, cs, "get_peer", tt.args)
 
 			if tt.getter.getCalls != tt.wantCalls {
@@ -270,7 +277,7 @@ func TestGetPeerTool(t *testing.T) {
 func TestGetPeerToolLeaksNoToken(t *testing.T) {
 	t.Parallel()
 	g := &fakePeerAPI{getErr: &netbird.APIError{Status: 500, Message: "boom"}}
-	cs, logs := connectClient(t, g)
+	cs, logs := connectClient(t, g, nil)
 	res, text := callTool(t, cs, "get_peer", map[string]any{"peer_id": "cdl0ajd5jtbs73abcdef"})
 	if !res.IsError || strings.Contains(text, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
 		t.Errorf("IsError=%v text=%q logs=%s", res.IsError, text, logs)
