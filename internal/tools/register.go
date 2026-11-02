@@ -13,6 +13,7 @@ import (
 // Client is the NetBird API surface the tools need.
 type Client interface {
 	peerAPI
+	groupAPI
 }
 
 // Register adds all tools to s. Every call is logged with tool name, duration
@@ -22,6 +23,8 @@ func Register(s *mcp.Server, c Client, logger *slog.Logger) {
 	mcp.AddTool(s, tool, logged(logger, tool.Name, h))
 	getTool, getH := getPeer(c)
 	mcp.AddTool(s, getTool, logged(logger, getTool.Name, getH))
+	groupsTool, groupsH := listGroups(c)
+	mcp.AddTool(s, groupsTool, logged(logger, groupsTool.Name, groupsH))
 }
 
 // logged wraps h to log each call (full error at Warn) and to turn handler

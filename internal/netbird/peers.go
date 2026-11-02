@@ -64,15 +64,6 @@ type PeerLocalFlags struct {
 	LazyConnectionEnabled *bool `json:"lazy_connection_enabled"`
 }
 
-// Group is the minimal group reference embedded in other resources.
-type Group struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	PeersCount     int    `json:"peers_count"`
-	ResourcesCount int    `json:"resources_count"`
-	Issued         string `json:"issued"`
-}
-
 // ListPeersParams filters ListPeers. Empty fields are not sent.
 type ListPeersParams struct {
 	Name string
