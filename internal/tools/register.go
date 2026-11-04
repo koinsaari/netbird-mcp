@@ -15,6 +15,7 @@ type Client interface {
 	peerAPI
 	groupAPI
 	policyAPI
+	userAPI
 }
 
 // Register adds all tools to s. Every call is logged with tool name, duration
@@ -30,6 +31,8 @@ func Register(s *mcp.Server, c Client, logger *slog.Logger) {
 	mcp.AddTool(s, getGroupTool, logged(logger, getGroupTool.Name, getGroupH))
 	policiesTool, policiesH := listPolicies(c)
 	mcp.AddTool(s, policiesTool, logged(logger, policiesTool.Name, policiesH))
+	usersTool, usersH := listUsers(c)
+	mcp.AddTool(s, usersTool, logged(logger, usersTool.Name, usersH))
 }
 
 // logged wraps h to log each call (full error at Warn) and to turn handler
