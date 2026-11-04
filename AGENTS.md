@@ -27,7 +27,7 @@ Model Context Protocol server that exposes the NetBird management API as MCP too
 - Tools do only what was requested; validate and escape arguments used in API paths.
 - Stdlib first; no new dependency without a reason.
 - Layers: `tools` → `netbird` client. Only `tools` imports the MCP SDK; `netbird` knows nothing of MCP.
-- Each tool is a closure `func xTool(c resourceAPI) (*mcp.Tool, handler)`, registered in `Register` through `logged`. One small interface per API resource (`peerAPI`), declared in `tools`.
+- Each tool is a closure named after the tool, e.g. `func listPeers(c peerAPI) (*mcp.Tool, handler)`, registered in `Register` through `logged`. One small interface per API resource (`peerAPI`), declared in `tools`.
 - API structs (`netbird`) mirror the OpenAPI schema; tool output structs (`tools`) are separate and trimmed for the model. Lists are never `null`; optional API fields are omitted, not zeroed.
 - Read-only tools set `ReadOnlyHint` and `IdempotentHint`.
 - The `netbird` client never puts the token or the full URL in errors; API error messages are sanitized.

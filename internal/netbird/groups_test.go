@@ -127,3 +127,71 @@ func TestListGroupsAPIError(t *testing.T) {
 		})
 	}
 }
+
+func TestGetGroupRequest(t *testing.T) {
+	t.Parallel()
+	var got *http.Request
+	c := newTestClient(t, "/api", func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		_, _ = w.Write([]byte("{}"))
+	})
+	if _, err := c.GetGroup(t.Context(), "ch8i4ug6lnn4g9hqv7m0"); err != nil {
+		t.Fatalf("GetGroup: %v", err)
+	}
+	if got.Method != http.MethodGet {
+		t.Errorf("method = %s, want GET", got.Method)
+	}
+	if got.URL.Path != "/api/groups/ch8i4ug6lnn4g9hqv7m0" {
+		t.Errorf("path = %q", got.URL.Path)
+	}
+	if h := got.Header.Get("Authorization"); h != "Token "+sentinelToken {
+		t.Errorf("Authorization = %q", h)
+	}
+	if h := got.Header.Get("Accept"); h != "application/json" {
+		t.Errorf("Accept = %q", h)
+	}
+}
+
+func TestGetGroupDecodeFull(t *testing.T) {
+	t.Parallel()
+	c := newTestClient(t, "/api", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"g1","name":"All","peers_count":2,"resources_count":1,"issued":"api",
+			"peers":[{"id":"p1","name":"laptop"},{"id":"p2","name":"phone"}],
+			"resources":[{"id":"r1","type":"host"}]}`))
+	})
+	got, err := c.GetGroup(t.Context(), "g1")
+	if err != nil {
+		t.Fatalf("GetGroup: %v", err)
+	}
+	want := Group{
+		ID: "g1", Name: "All", PeersCount: 2, ResourcesCount: 1, Issued: "api",
+		Peers:     []PeerMinimum{{ID: "p1", Name: "laptop"}, {ID: "p2", Name: "phone"}},
+		Resources: []Resource{{ID: "r1", Type: "host"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestGetGroupNotFound(t *testing.T) {
+	t.Parallel()
+	c := newTestClient(t, "/api", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"group not found nbp_SENTINEL","code":404}`))
+	})
+	_, err := c.GetGroup(t.Context(), "ch8i4ug6lnn4g9hqv7m0")
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("err = %v, want *APIError", err)
+	}
+	if apiErr.Status != http.StatusNotFound {
+		t.Errorf("Status = %d, want 404", apiErr.Status)
+	}
+	if strings.Contains(err.Error(), sentinelToken) {
+		t.Errorf("err leaks token: %q", err)
+	}
+	if !strings.HasPrefix(err.Error(), "get group: ") {
+		t.Errorf("err = %q, want get group prefix", err)
+	}
+}

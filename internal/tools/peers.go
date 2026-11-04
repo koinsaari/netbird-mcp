@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/netip"
-	"regexp"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -14,7 +13,6 @@ import (
 var (
 	errInvalidIP     = errors.New("invalid ip: must be an IP address without zone")
 	errInvalidPeerID = errors.New("invalid peer_id: must be a 20-character NetBird peer ID")
-	peerIDPattern    = regexp.MustCompile(`^[0-9a-v]{20}$`)
 )
 
 type peerAPI interface {
@@ -175,7 +173,7 @@ func getPeer(c peerAPI) (*mcp.Tool, mcp.ToolHandlerFor[getPeerInput, peerDetailO
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}
 	handler := func(ctx context.Context, _ *mcp.CallToolRequest, in getPeerInput) (*mcp.CallToolResult, peerDetailOutput, error) {
-		if !peerIDPattern.MatchString(in.PeerID) {
+		if !validID(in.PeerID) {
 			return nil, peerDetailOutput{}, errInvalidPeerID
 		}
 		peer, err := c.GetPeer(ctx, in.PeerID)

@@ -48,3 +48,12 @@ func (c *Client) ListGroups(ctx context.Context, params ListGroupsParams) ([]Gro
 	}
 	return groups, nil
 }
+
+// GetGroup returns the group with the given ID. The caller validates id.
+func (c *Client) GetGroup(ctx context.Context, id string) (Group, error) {
+	var group Group
+	if err := c.get(ctx, &group, nil, "groups", id); err != nil {
+		return Group{}, fmt.Errorf("get group: %w", err)
+	}
+	return group, nil
+}
