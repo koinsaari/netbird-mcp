@@ -259,22 +259,13 @@ func TestGetGroupTool(t *testing.T) {
 				if res.IsError {
 					t.Fatalf("unexpected tool error: %s", text)
 				}
-				sc, ok := res.StructuredContent.(map[string]any)
-				if !ok {
-					t.Fatalf("structured content = %#v", res.StructuredContent)
+				var want map[string]any
+				if err := json.Unmarshal([]byte(`{"id":"`+id+`","name":"devs","peers_count":1,"resources_count":1,"issued":"api",`+
+					`"peers":[{"id":"p1","name":"laptop"}],"resources":[{"id":"r1","type":"host"}]}`), &want); err != nil {
+					t.Fatalf("unmarshal want: %v", err)
 				}
-				for _, k := range []string{"id", "name", "peers_count", "resources_count", "issued", "peers", "resources"} {
-					if _, ok := sc[k]; !ok {
-						t.Errorf("structured content missing %q", k)
-					}
-				}
-				peers, _ := sc["peers"].([]any)
-				if len(peers) != 1 || peers[0].(map[string]any)["name"] != "laptop" {
-					t.Errorf("peers = %#v", sc["peers"])
-				}
-				resources, _ := sc["resources"].([]any)
-				if len(resources) != 1 || resources[0].(map[string]any)["type"] != "host" {
-					t.Errorf("resources = %#v", sc["resources"])
+				if !reflect.DeepEqual(res.StructuredContent, want) {
+					t.Errorf("structured content = %#v, want %#v", res.StructuredContent, want)
 				}
 			}
 			if strings.Contains(text, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
