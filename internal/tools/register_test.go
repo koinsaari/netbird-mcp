@@ -47,11 +47,16 @@ func connect(t *testing.T, f *fakePeerAPI) (*mcp.ClientSession, *bytes.Buffer) {
 type fakeClient struct {
 	peerAPI
 	groupAPI
+	policyAPI
 }
 
 func connectClient(t *testing.T, p peerAPI, g groupAPI) (*mcp.ClientSession, *bytes.Buffer) {
 	t.Helper()
-	c := fakeClient{peerAPI: p, groupAPI: g}
+	return connectFake(t, fakeClient{peerAPI: p, groupAPI: g})
+}
+
+func connectFake(t *testing.T, c Client) (*mcp.ClientSession, *bytes.Buffer) {
+	t.Helper()
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "v0"}, &mcp.ServerOptions{Logger: logger})
