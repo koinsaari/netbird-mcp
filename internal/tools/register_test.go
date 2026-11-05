@@ -49,6 +49,7 @@ type fakeClient struct {
 	groupAPI
 	policyAPI
 	userAPI
+	routeAPI
 }
 
 func connectClient(t *testing.T, p peerAPI, g groupAPI) (*mcp.ClientSession, *bytes.Buffer) {

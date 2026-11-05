@@ -16,6 +16,7 @@ type Client interface {
 	groupAPI
 	policyAPI
 	userAPI
+	routeAPI
 }
 
 // Register adds all tools to s. Every call is logged with tool name, duration
@@ -33,6 +34,8 @@ func Register(s *mcp.Server, c Client, logger *slog.Logger) {
 	mcp.AddTool(s, policiesTool, logged(logger, policiesTool.Name, policiesH))
 	usersTool, usersH := listUsers(c)
 	mcp.AddTool(s, usersTool, logged(logger, usersTool.Name, usersH))
+	routesTool, routesH := listRoutes(c)
+	mcp.AddTool(s, routesTool, logged(logger, routesTool.Name, routesH))
 }
 
 // logged wraps h to log each call (full error at Warn) and to turn handler
