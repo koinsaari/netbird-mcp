@@ -36,6 +36,8 @@ func Register(s *mcp.Server, c Client, logger *slog.Logger) {
 	mcp.AddTool(s, usersTool, logged(logger, usersTool.Name, usersH))
 	routesTool, routesH := listRoutes(c)
 	mcp.AddTool(s, routesTool, logged(logger, routesTool.Name, routesH))
+	accessTool, accessH := getPeerAccess(c)
+	mcp.AddTool(s, accessTool, logged(logger, accessTool.Name, accessH))
 }
 
 // logged wraps h to log each call (full error at Warn) and to turn handler
