@@ -245,12 +245,11 @@ func TestToPeerAccessOutput(t *testing.T) {
 	if got.Peer.ID != "p1" || got.Peer.Name != "laptop" {
 		t.Errorf("peer detail not mapped: %+v", got.Peer)
 	}
-	if got.UserID != "u1" {
-		t.Errorf("user_id = %q, want u1", got.UserID)
+	if got.Peer.UserID != "u1" {
+		t.Errorf("peer user_id = %q, want u1", got.Peer.UserID)
 	}
-	wantGroups := []groupOutput{{ID: "g1", Name: "devs"}, {ID: "g2", Name: "all"}}
-	if !reflect.DeepEqual(got.Groups, wantGroups) {
-		t.Errorf("groups = %+v, want %+v", got.Groups, wantGroups)
+	if len(got.Peer.Groups) != 2 || got.Peer.Groups[0].ID != "g1" || got.Peer.Groups[1].ID != "g2" {
+		t.Errorf("peer groups = %+v", got.Peer.Groups)
 	}
 
 	policies := []netbird.Policy{{ID: "a", Rules: []netbird.PolicyRule{{Sources: []netbird.Group{grp("g1", "devs")}}}}}
@@ -287,7 +286,7 @@ func TestPeerAccessOutputJSON(t *testing.T) {
 		if err := json.Unmarshal(b, &m); err != nil {
 			t.Fatal(err)
 		}
-		for _, k := range []string{"groups", "policies", "routes"} {
+		for _, k := range []string{"policies", "routes"} {
 			if string(m[k]) != "[]" {
 				t.Errorf("%s = %s, want []", k, m[k])
 			}

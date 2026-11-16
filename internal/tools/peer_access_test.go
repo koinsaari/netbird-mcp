@@ -156,11 +156,17 @@ func TestGetPeerAccessTool(t *testing.T) {
 	if peer, _ := sc["peer"].(map[string]any); peer["id"] != accessPeerID || peer["name"] != "laptop" {
 		t.Errorf("peer = %#v", sc["peer"])
 	}
-	if sc["user_id"] != "u1" {
-		t.Errorf("user_id = %#v", sc["user_id"])
+	peer, _ := sc["peer"].(map[string]any)
+	if peer["user_id"] != "u1" {
+		t.Errorf("peer user_id = %#v", peer["user_id"])
 	}
-	if g, _ := sc["groups"].([]any); len(g) != 1 || g[0].(map[string]any)["id"] != "g1" {
-		t.Errorf("groups = %#v", sc["groups"])
+	if g, _ := peer["groups"].([]any); len(g) != 1 || g[0].(map[string]any)["id"] != "g1" {
+		t.Errorf("peer groups = %#v", peer["groups"])
+	}
+	for _, dup := range []string{"groups", "user_id"} {
+		if _, has := sc[dup]; has {
+			t.Errorf("top-level %q repeats the peer object", dup)
+		}
 	}
 	pols, _ := sc["policies"].([]any)
 	if len(pols) != 1 || pols[0].(map[string]any)["id"] != "p1" {
@@ -290,7 +296,7 @@ func TestGetPeerAccessToolSchema(t *testing.T) {
 	if tool.Name != "get_peer_access" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	const wantDesc = "Describes one NetBird peer's access: its groups, the access policies whose rules apply to it (with direction and the other side) and the network routes it is part of."
+	const wantDesc = "Describes one NetBird peer's access: the access policies whose rules apply to it (with direction and the other side) and the network routes it is part of. Disabled policies, rules and routes are included with their enabled flag. Posture checks are not evaluated."
 	if tool.Description != wantDesc {
 		t.Errorf("description = %q", tool.Description)
 	}

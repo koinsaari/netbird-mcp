@@ -8,8 +8,6 @@ import (
 
 type peerAccessOutput struct {
 	Peer     peerDetailOutput     `json:"peer"`
-	Groups   []groupOutput        `json:"groups"`
-	UserID   string               `json:"user_id"`
 	Policies []accessPolicyOutput `json:"policies"`
 	Routes   []accessRouteOutput  `json:"routes"`
 }
@@ -181,12 +179,8 @@ func matchRoutes(peer netbird.Peer, routes []netbird.Route) []accessRouteOutput 
 
 // toPeerAccessOutput joins peer with the policy rules and routes that apply to it.
 func toPeerAccessOutput(peer netbird.Peer, policies []netbird.Policy, routes []netbird.Route) peerAccessOutput {
-	groups := make([]groupOutput, 0, len(peer.Groups))
-	for _, g := range peer.Groups {
-		groups = append(groups, groupOutput{ID: g.ID, Name: g.Name})
-	}
 	return peerAccessOutput{
-		Peer: toPeerDetailOutput(peer), Groups: groups, UserID: peer.UserID,
+		Peer:     toPeerDetailOutput(peer),
 		Policies: matchPolicies(peer, policies), Routes: matchRoutes(peer, routes),
 	}
 }

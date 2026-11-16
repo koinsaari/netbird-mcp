@@ -26,7 +26,7 @@ type getPeerAccessInput struct {
 func getPeerAccess(c peerAccessAPI) (*mcp.Tool, mcp.ToolHandlerFor[getPeerAccessInput, peerAccessOutput]) {
 	tool := &mcp.Tool{
 		Name:        "get_peer_access",
-		Description: "Describes one NetBird peer's access: its groups, the access policies whose rules apply to it (with direction and the other side) and the network routes it is part of.",
+		Description: "Describes one NetBird peer's access: the access policies whose rules apply to it (with direction and the other side) and the network routes it is part of. Disabled policies, rules and routes are included with their enabled flag. Posture checks are not evaluated.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}
 	handler := func(ctx context.Context, _ *mcp.CallToolRequest, in getPeerAccessInput) (*mcp.CallToolResult, peerAccessOutput, error) {
