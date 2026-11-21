@@ -18,7 +18,6 @@ type listRoutesOutput struct {
 	Routes []routeOutput `json:"routes"`
 }
 
-// routeOutput passes peer and group IDs through unresolved.
 type routeOutput struct {
 	ID                  string   `json:"id"`
 	NetworkID           string   `json:"network_id"`
@@ -37,7 +36,6 @@ type routeOutput struct {
 	SkipAutoApply       bool     `json:"skip_auto_apply"`
 }
 
-// listRoutes builds the list_routes tool definition and its handler.
 func listRoutes(c routeAPI) (*mcp.Tool, mcp.ToolHandlerFor[listRoutesInput, listRoutesOutput]) {
 	tool := &mcp.Tool{
 		Name:        "list_routes",
@@ -66,12 +64,4 @@ func toListRoutesOutput(routes []netbird.Route) listRoutesOutput {
 		})
 	}
 	return out
-}
-
-// nonNil returns s, or an empty slice when s is nil, so it encodes as [].
-func nonNil(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
 }

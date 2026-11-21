@@ -43,13 +43,13 @@ func connect(t *testing.T, f *fakePeerAPI) (*mcp.ClientSession, *bytes.Buffer) {
 	return connectClient(t, f, nil)
 }
 
-// fakeClient combines one fake per resource into a Client.
 type fakeClient struct {
 	peerAPI
 	groupAPI
 	policyAPI
 	userAPI
 	routeAPI
+	networkAPI
 }
 
 func connectClient(t *testing.T, p peerAPI, g groupAPI) (*mcp.ClientSession, *bytes.Buffer) {
@@ -69,12 +69,12 @@ func connectFake(t *testing.T, c Client) (*mcp.ClientSession, *bytes.Buffer) {
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
-	t.Cleanup(func() { _ = ss.Close() }) // best-effort teardown
+	t.Cleanup(func() { _ = ss.Close() })
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "v0"}, nil).Connect(t.Context(), t2, nil)
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { _ = cs.Close() }) // best-effort teardown
+	t.Cleanup(func() { _ = cs.Close() })
 	return cs, &logs
 }
 
