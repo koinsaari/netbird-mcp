@@ -23,7 +23,7 @@ func TestToolMessage(t *testing.T) {
 		{"429", &netbird.APIError{Status: 429, Message: "x"}, "netbird api: 429: x (hint: rate limited, retry later)"},
 		{"503", &netbird.APIError{Status: 503, Message: "down"}, "netbird api: 503: down (hint: NetBird server error, retry later)"},
 		{"404", &netbird.APIError{Status: 404, Message: "nope"}, "netbird api: 404: nope (hint: not found; check the ID or NETBIRD_API_URL)"},
-		{"404 invalid token", &netbird.APIError{Status: 404, Message: "invalid token: pat: [redacted] not found"}, "netbird api: 404: invalid token: pat: [redacted] not found (hint: token invalid or expired)"},
+		{"404 invalid token", &netbird.APIError{Status: 404, Message: "invalid token: pat: [redacted] not found", Err: netbird.ErrInvalidToken}, "netbird api: 404: invalid token: pat: [redacted] not found (hint: token invalid or expired)"},
 		{"409 no hint", &netbird.APIError{Status: 409, Message: "conflict"}, "netbird api: 409: conflict"},
 		{"redirect", &netbird.APIError{Status: 301, Message: "Moved Permanently"}, "netbird api: 301: Moved Permanently (hint: server redirected; check NETBIRD_API_URL)"},
 		{"not json", fmt.Errorf("list peers: decode response: %w", netbird.ErrNotJSON), "list peers: decode response: response is not JSON (hint: check NETBIRD_API_URL points at the NetBird API, usually ending in /api)"},

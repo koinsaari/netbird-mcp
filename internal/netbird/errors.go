@@ -2,6 +2,7 @@ package netbird
 
 import (
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,18 +15,20 @@ const maxMessageLen = 512
 
 var patFingerprint = regexp.MustCompile(`(?i)\bpat:\s*\S+`)
 
+var ErrInvalidToken = errors.New("invalid token")
+
 type APIError struct {
-	Status       int
-	Message      string
-	invalidToken bool
+	Status  int
+	Message string
+	Err     error
 }
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("netbird api: %d: %s", e.Status, e.Message)
 }
 
-func (e *APIError) InvalidToken() bool {
-	return e.invalidToken || isInvalidTokenMessage(e.Message)
+func (e *APIError) Unwrap() error {
+	return e.Err
 }
 
 func isInvalidTokenMessage(msg string) bool {
@@ -44,7 +47,11 @@ func newAPIError(resp *http.Response, token string) *APIError {
 	if msg == "" {
 		msg = http.StatusText(resp.StatusCode)
 	}
-	return &APIError{Status: resp.StatusCode, Message: msg, invalidToken: isInvalidTokenMessage(body.Message)}
+	apiErr := &APIError{Status: resp.StatusCode, Message: msg}
+	if isInvalidTokenMessage(body.Message) {
+		apiErr.Err = ErrInvalidToken
+	}
+	return apiErr
 }
 
 func sanitize(msg, token string) string {

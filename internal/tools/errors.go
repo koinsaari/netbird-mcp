@@ -13,7 +13,7 @@ func toolMessage(err error) string {
 	}
 	if apiErr, ok := errors.AsType[*netbird.APIError](err); ok {
 		hint := apiHint(apiErr.Status)
-		if apiErr.InvalidToken() {
+		if errors.Is(err, netbird.ErrInvalidToken) {
 			hint = "token invalid or expired"
 		}
 		if hint != "" {

@@ -1,6 +1,7 @@
 package netbird
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -41,7 +42,7 @@ func TestAPIErrorRedactsPATFingerprint(t *testing.T) {
 			if apiErr.Message != tt.wantMessage {
 				t.Errorf("Message = %q, want %q", apiErr.Message, tt.wantMessage)
 			}
-			if got := apiErr.InvalidToken(); got != tt.wantInvalid {
+			if got := errors.Is(apiErr, ErrInvalidToken); got != tt.wantInvalid {
 				t.Errorf("InvalidToken = %v, want %v", got, tt.wantInvalid)
 			}
 			if strings.Contains(apiErr.Message, "hx5yu") {
@@ -51,7 +52,7 @@ func TestAPIErrorRedactsPATFingerprint(t *testing.T) {
 	}
 }
 
-func TestInvalidToken(t *testing.T) {
+func TestIsInvalidTokenMessage(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		message string
@@ -66,9 +67,8 @@ func TestInvalidToken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.message, func(t *testing.T) {
 			t.Parallel()
-			e := &APIError{Status: 404, Message: tt.message}
-			if got := e.InvalidToken(); got != tt.want {
-				t.Errorf("InvalidToken = %v, want %v", got, tt.want)
+			if got := isInvalidTokenMessage(tt.message); got != tt.want {
+				t.Errorf("isInvalidTokenMessage = %v, want %v", got, tt.want)
 			}
 		})
 	}
