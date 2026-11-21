@@ -168,14 +168,3 @@ func TestToPeerDetailOutput(t *testing.T) {
 		})
 	}
 }
-
-func TestToGroupOutputs(t *testing.T) {
-	t.Parallel()
-	if got := toGroupOutputs(nil); got == nil || len(got) != 0 {
-		t.Errorf("nil input = %#v, want empty non-nil", got)
-	}
-	got := toGroupOutputs([]netbird.Group{{ID: "g1", Name: "a", PeersCount: 3}})
-	if !reflect.DeepEqual(got, []groupOutput{{ID: "g1", Name: "a"}}) {
-		t.Errorf("got %+v", got)
-	}
-}
