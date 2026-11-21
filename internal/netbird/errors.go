@@ -2,30 +2,43 @@ package netbird
 
 import (
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"unicode"
 )
 
 const maxMessageLen = 512
 
-// APIError is a non-2xx response from the NetBird API.
+var patFingerprint = regexp.MustCompile(`(?i)\bpat:\s*\S+`)
+
+var ErrInvalidToken = errors.New("invalid token")
+
 type APIError struct {
 	Status  int
-	Message string // sanitized message from the response body, or the status text
+	Message string
+	Err     error
 }
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("netbird api: %d: %s", e.Status, e.Message)
 }
 
+func (e *APIError) Unwrap() error {
+	return e.Err
+}
+
+func isInvalidTokenMessage(msg string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(msg)), "invalid token")
+}
+
 func newAPIError(resp *http.Response, token string) *APIError {
 	var body struct {
 		Message string `json:"message"`
 	}
-	// Any read or decode failure falls back to the status text.
 	if err := json.UnmarshalRead(io.LimitReader(resp.Body, maxErrorBodySize), &body); err != nil {
 		body.Message = ""
 	}
@@ -34,12 +47,13 @@ func newAPIError(resp *http.Response, token string) *APIError {
 	if msg == "" {
 		msg = http.StatusText(resp.StatusCode)
 	}
-	return &APIError{Status: resp.StatusCode, Message: msg}
+	apiErr := &APIError{Status: resp.StatusCode, Message: msg}
+	if isInvalidTokenMessage(body.Message) {
+		apiErr.Err = ErrInvalidToken
+	}
+	return apiErr
 }
 
-// sanitize strips control and invisible characters and caps the length. A
-// message that contains the token in any form is dropped entirely, because
-// partial redaction can be fooled by splitting the token.
 func sanitize(msg, token string) string {
 	if token != "" && strings.Contains(squash(msg), token) {
 		return ""
@@ -54,6 +68,7 @@ func sanitize(msg, token string) string {
 		return r
 	}, msg)
 	msg = strings.Join(strings.Fields(msg), " ")
+	msg = patFingerprint.ReplaceAllString(msg, "pat: [redacted]")
 	if len(msg) > maxMessageLen {
 		msg = strings.ToValidUTF8(msg[:maxMessageLen], "")
 	}
