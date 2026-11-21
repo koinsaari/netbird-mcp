@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,14 +14,8 @@ import (
 )
 
 const accessPeerID = "cdl0ajd5jtbs73abcdef"
-
-// barrierTimeout bounds how long a fake waits for its siblings, so a
-// sequential implementation fails instead of hanging.
 const barrierTimeout = 2 * time.Second
 
-// accessFakes backs all three APIs. Each call waits until all three have
-// started. A failing call then returns its error, and the others wait for
-// their context to be cancelled and return its error, like a real client.
 type accessFakes struct {
 	peer     netbird.Peer
 	policies []netbird.Policy
@@ -34,7 +29,7 @@ type accessFakes struct {
 	peerCalls  atomic.Int32
 	polCalls   atomic.Int32
 	routeCalls atomic.Int32
-	cancelled  sync.Map // call name -> struct{}
+	cancelled  sync.Map
 	peerID     atomic.Value
 }
 
@@ -126,8 +121,8 @@ func TestGetPeerAccessTool(t *testing.T) {
 	t.Parallel()
 	f := newAccessFakes()
 	f.peer = netbird.Peer{
-		ID: accessPeerID, Name: "laptop", UserID: "u1",
-		Groups: []netbird.Group{{ID: "g1", Name: "devs"}},
+		ID: accessPeerID, Name: "laptop", UserID: "u1", OS: "linux",
+		Groups: []netbird.Group{{ID: "g1", Name: "devs", PeersCount: 4}},
 	}
 	f.policies = []netbird.Policy{
 		{ID: "p1", Name: "ssh", Enabled: true, Rules: []netbird.PolicyRule{{
@@ -157,13 +152,24 @@ func TestGetPeerAccessTool(t *testing.T) {
 		t.Errorf("peer = %#v", sc["peer"])
 	}
 	peer, _ := sc["peer"].(map[string]any)
-	if peer["user_id"] != "u1" {
-		t.Errorf("peer user_id = %#v", peer["user_id"])
+	wantKeys := []string{"connected", "dns_label", "groups", "id", "ip", "name"}
+	var gotKeys []string
+	for k := range peer {
+		gotKeys = append(gotKeys, k)
+	}
+	slices.Sort(gotKeys)
+	if !slices.Equal(gotKeys, wantKeys) {
+		t.Errorf("peer keys = %v, want %v", gotKeys, wantKeys)
+	}
+	if g, _ := peer["groups"].([]any); len(g) == 1 {
+		if gm, _ := g[0].(map[string]any); len(gm) != 2 {
+			t.Errorf("group keys = %#v, want id and name only", gm)
+		}
 	}
 	if g, _ := peer["groups"].([]any); len(g) != 1 || g[0].(map[string]any)["id"] != "g1" {
 		t.Errorf("peer groups = %#v", peer["groups"])
 	}
-	for _, dup := range []string{"groups", "user_id"} {
+	for _, dup := range []string{"groups", "user_id", "os"} {
 		if _, has := sc[dup]; has {
 			t.Errorf("top-level %q repeats the peer object", dup)
 		}

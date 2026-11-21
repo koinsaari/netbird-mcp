@@ -239,14 +239,72 @@ func TestMatchRoutes(t *testing.T) {
 	}
 }
 
+func TestToAccessPeerOutput(t *testing.T) {
+	yes := true
+	tests := []struct {
+		name string
+		in   netbird.Peer
+		want accessPeerOutput
+	}{
+		{
+			name: "trimmed fields and groups",
+			in: netbird.Peer{
+				ID: "p1", Name: "laptop", IP: "100.64.0.1", DNSLabel: "laptop.netbird.cloud", Connected: true,
+				UserID: "u1", OS: "linux", Hostname: "h",
+				Groups: []netbird.Group{{ID: "g1", Name: "devs", PeersCount: 3}, {ID: "g2", Name: "all"}},
+			},
+			want: accessPeerOutput{
+				ID: "p1", Name: "laptop", IP: "100.64.0.1", DNSLabel: "laptop.netbird.cloud", Connected: true,
+				Groups: []groupOutput{{ID: "g1", Name: "devs"}, {ID: "g2", Name: "all"}},
+			},
+		},
+		{
+			name: "nil groups become empty list",
+			in:   netbird.Peer{ID: "p1"},
+			want: accessPeerOutput{ID: "p1", Groups: []groupOutput{}},
+		},
+		{
+			name: "local flags present",
+			in:   netbird.Peer{ID: "p1", LocalFlags: &netbird.PeerLocalFlags{ServerSSHAllowed: &yes}},
+			want: accessPeerOutput{ID: "p1", Groups: []groupOutput{}, LocalFlags: &localFlagsOutput{ServerSSHAllowed: &yes}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := toAccessPeerOutput(tt.in); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAccessPeerOutputJSON(t *testing.T) {
+	b, err := json.Marshal(toAccessPeerOutput(netbird.Peer{ID: "p1"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	if string(m["groups"]) != "[]" {
+		t.Errorf("groups = %s, want []", m["groups"])
+	}
+	if _, has := m["local_flags"]; has {
+		t.Errorf("local_flags present without flags: %s", b)
+	}
+	for _, k := range []string{"id", "name", "ip", "dns_label", "connected", "groups"} {
+		if _, has := m[k]; !has {
+			t.Errorf("missing key %s: %s", k, b)
+		}
+	}
+}
+
 func TestToPeerAccessOutput(t *testing.T) {
 	peer := testPeer()
 	got := toPeerAccessOutput(peer, nil, nil)
 	if got.Peer.ID != "p1" || got.Peer.Name != "laptop" {
-		t.Errorf("peer detail not mapped: %+v", got.Peer)
-	}
-	if got.Peer.UserID != "u1" {
-		t.Errorf("peer user_id = %q, want u1", got.Peer.UserID)
+		t.Errorf("peer not mapped: %+v", got.Peer)
 	}
 	if len(got.Peer.Groups) != 2 || got.Peer.Groups[0].ID != "g1" || got.Peer.Groups[1].ID != "g2" {
 		t.Errorf("peer groups = %+v", got.Peer.Groups)
