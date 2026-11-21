@@ -85,14 +85,10 @@ func toListPeersOutput(peers []netbird.Peer) listPeersOutput {
 }
 
 func toPeerOutput(p netbird.Peer) peerOutput {
-	groups := make([]groupOutput, 0, len(p.Groups))
-	for _, g := range p.Groups {
-		groups = append(groups, groupOutput{ID: g.ID, Name: g.Name})
-	}
 	return peerOutput{
 		ID: p.ID, Name: p.Name, Hostname: p.Hostname, DNSLabel: p.DNSLabel, IP: p.IP,
 		Connected: p.Connected, LastSeen: p.LastSeen, OS: p.OS, Version: p.Version,
-		Groups: groups, UserID: p.UserID, LoginExpired: p.LoginExpired,
+		Groups: toGroupOutputs(p.Groups), UserID: p.UserID, LoginExpired: p.LoginExpired,
 		ApprovalRequired: p.ApprovalRequired,
 	}
 }
@@ -148,8 +144,6 @@ type networkAddressOutput struct {
 	MAC   string `json:"mac"`
 }
 
-// localFlagsOutput leaves out flags the peer did not report, so they are not
-// shown as false.
 type localFlagsOutput struct {
 	RosenpassEnabled      *bool `json:"rosenpass_enabled,omitempty"`
 	RosenpassPermissive   *bool `json:"rosenpass_permissive,omitempty"`
@@ -164,8 +158,6 @@ type localFlagsOutput struct {
 	LazyConnectionEnabled *bool `json:"lazy_connection_enabled,omitempty"`
 }
 
-// getPeer builds the get_peer tool definition and its handler. The handler
-// validates the ID before calling the client and returns raw errors.
 func getPeer(c peerAPI) (*mcp.Tool, mcp.ToolHandlerFor[getPeerInput, peerDetailOutput]) {
 	tool := &mcp.Tool{
 		Name:        "get_peer",
