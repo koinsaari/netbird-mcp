@@ -20,8 +20,11 @@ type accessFakes struct {
 	peer     netbird.Peer
 	policies []netbird.Policy
 	routes   []netbird.Route
+	networks []netbird.Network
+	routers  map[string][]netbird.NetworkRouter
+	resrcs   map[string][]netbird.NetworkResource
 
-	peerErr, policyErr, routeErr error
+	peerErr, policyErr, routeErr, networkErr, subErr error
 
 	arrived    atomic.Int32
 	all        chan struct{}
@@ -29,6 +32,7 @@ type accessFakes struct {
 	peerCalls  atomic.Int32
 	polCalls   atomic.Int32
 	routeCalls atomic.Int32
+	netCalls   atomic.Int32
 	cancelled  sync.Map
 	peerID     atomic.Value
 }
@@ -36,11 +40,11 @@ type accessFakes struct {
 func newAccessFakes() *accessFakes { return &accessFakes{all: make(chan struct{})} }
 
 func (f *accessFakes) failing() bool {
-	return f.peerErr != nil || f.policyErr != nil || f.routeErr != nil
+	return f.peerErr != nil || f.policyErr != nil || f.routeErr != nil || f.networkErr != nil
 }
 
 func (f *accessFakes) call(ctx context.Context, name string, own error) error {
-	if f.arrived.Add(1) == 3 {
+	if f.arrived.Add(1) == 4 {
 		f.once.Do(func() { close(f.all) })
 	}
 	select {
@@ -105,16 +109,41 @@ func (a accessRouteFake) ListRoutes(ctx context.Context) ([]netbird.Route, error
 	return a.f.routes, nil
 }
 
+type accessNetworkFake struct{ f *accessFakes }
+
+func (a accessNetworkFake) ListNetworks(ctx context.Context) ([]netbird.Network, error) {
+	a.f.netCalls.Add(1)
+	if err := a.f.call(ctx, "networks", a.f.networkErr); err != nil {
+		return nil, err
+	}
+	return a.f.networks, nil
+}
+
+func (a accessNetworkFake) ListNetworkRouters(_ context.Context, id string) ([]netbird.NetworkRouter, error) {
+	if a.f.subErr != nil {
+		return nil, a.f.subErr
+	}
+	return a.f.routers[id], nil
+}
+
+func (a accessNetworkFake) ListNetworkResources(_ context.Context, id string) ([]netbird.NetworkResource, error) {
+	return a.f.resrcs[id], nil
+}
+
 func (f *accessFakes) api() peerAccessAPI {
 	return struct {
 		peerAPI
 		policyAPI
 		routeAPI
-	}{accessPeerFake{f: f}, accessPolicyFake{f}, accessRouteFake{f}}
+		networkAPI
+	}{accessPeerFake{f: f}, accessPolicyFake{f}, accessRouteFake{f}, accessNetworkFake{f}}
 }
 
 func (f *accessFakes) client() Client {
-	return fakeClient{peerAPI: accessPeerFake{f: f}, policyAPI: accessPolicyFake{f}, routeAPI: accessRouteFake{f}}
+	return fakeClient{
+		peerAPI: accessPeerFake{f: f}, policyAPI: accessPolicyFake{f}, routeAPI: accessRouteFake{f},
+		networkAPI: accessNetworkFake{f},
+	}
 }
 
 func TestGetPeerAccessTool(t *testing.T) {
@@ -137,6 +166,20 @@ func TestGetPeerAccessTool(t *testing.T) {
 	f.routes = []netbird.Route{
 		{ID: "r1", NetworkID: "lan", Network: "10.0.0.0/24", Enabled: true, Peer: accessPeerID},
 		{ID: "r2", NetworkID: "other", Peer: "nope"},
+	}
+	f.networks = []netbird.Network{
+		{ID: "n1", Name: "office", Routers: []string{"rt1"}, Resources: []string{"res1", "res2"}},
+		{ID: "n2", Name: "unrelated", Routers: []string{"rt2"}},
+	}
+	f.routers = map[string][]netbird.NetworkRouter{
+		"n1": {{ID: "rt1", Peer: accessPeerID, Enabled: true}},
+		"n2": {{ID: "rt2", Peer: "nope"}},
+	}
+	f.resrcs = map[string][]netbird.NetworkResource{
+		"n1": {
+			{ID: "res1", Name: "db", Address: "10.0.0.5", Type: "host", Enabled: true, Groups: []netbird.Group{{ID: "g2"}}},
+			{ID: "res2", Name: "other", Address: "10.0.0.6", Type: "host", Groups: []netbird.Group{{ID: "g9"}}},
+		},
 	}
 
 	cs, logs := connectFake(t, f.client())
@@ -189,11 +232,32 @@ func TestGetPeerAccessTool(t *testing.T) {
 	if roles, _ := routes[0].(map[string]any)["roles"].([]any); len(roles) != 1 || roles[0] != "routing_peer" {
 		t.Errorf("roles = %#v", roles)
 	}
+	nets, _ := sc["networks"].([]any)
+	if len(nets) != 1 {
+		t.Fatalf("networks = %#v", sc["networks"])
+	}
+	n1, _ := nets[0].(map[string]any)
+	if n1["id"] != "n1" || n1["name"] != "office" {
+		t.Errorf("network = %#v", n1)
+	}
+	nr, _ := n1["routers"].([]any)
+	if len(nr) != 1 || nr[0].(map[string]any)["id"] != "rt1" || nr[0].(map[string]any)["enabled"] != true {
+		t.Errorf("network routers = %#v", n1["routers"])
+	}
+	nres, _ := n1["resources"].([]any)
+	if len(nres) != 1 {
+		t.Fatalf("network resources = %#v", n1["resources"])
+	}
+	r0, _ := nres[0].(map[string]any)
+	via, _ := r0["via_policies"].([]any)
+	if r0["id"] != "res1" || r0["address"] != "10.0.0.5" || len(via) != 1 || via[0] != "p1" {
+		t.Errorf("network resource = %#v", r0)
+	}
 	if got, _ := f.peerID.Load().(string); got != accessPeerID {
 		t.Errorf("peer id = %q", got)
 	}
-	if f.peerCalls.Load() != 1 || f.polCalls.Load() != 1 || f.routeCalls.Load() != 1 {
-		t.Errorf("calls = %d/%d/%d, want 1 each", f.peerCalls.Load(), f.polCalls.Load(), f.routeCalls.Load())
+	if f.peerCalls.Load() != 1 || f.polCalls.Load() != 1 || f.routeCalls.Load() != 1 || f.netCalls.Load() != 1 {
+		t.Errorf("calls = %d/%d/%d/%d, want 1 each", f.peerCalls.Load(), f.polCalls.Load(), f.routeCalls.Load(), f.netCalls.Load())
 	}
 	if !strings.Contains(logs.String(), "tool=get_peer_access") || !strings.Contains(logs.String(), "is_error=false") {
 		t.Errorf("logs missing tool fields: %s", logs)
@@ -213,7 +277,7 @@ func TestGetPeerAccessToolInvalidID(t *testing.T) {
 			if !res.IsError || text != errInvalidPeerID.Error() {
 				t.Errorf("IsError=%v text=%q, want %q", res.IsError, text, errInvalidPeerID)
 			}
-			if n := f.peerCalls.Load() + f.polCalls.Load() + f.routeCalls.Load(); n != 0 {
+			if n := f.peerCalls.Load() + f.polCalls.Load() + f.routeCalls.Load() + f.netCalls.Load(); n != 0 {
 				t.Errorf("API calls = %d, want 0", n)
 			}
 		})
@@ -246,17 +310,22 @@ func TestGetPeerAccessToolFailure(t *testing.T) {
 		{
 			name: "peer 404", set: func(f *accessFakes) { f.peerErr = notFound },
 			wantErr:    "netbird api: 404: peer not found (hint: not found; check the ID or NETBIRD_API_URL)",
-			wantCancel: []string{"policies", "routes"},
+			wantCancel: []string{"policies", "routes", "networks"},
 		},
 		{
 			name: "policies 401", set: func(f *accessFakes) { f.policyErr = unauthorized },
 			wantErr:    "netbird api: 401: bad token (hint: token invalid or expired)",
-			wantCancel: []string{"peer", "routes"},
+			wantCancel: []string{"peer", "routes", "networks"},
 		},
 		{
 			name: "routes 401", set: func(f *accessFakes) { f.routeErr = unauthorized },
 			wantErr:    "netbird api: 401: bad token (hint: token invalid or expired)",
-			wantCancel: []string{"peer", "policies"},
+			wantCancel: []string{"peer", "policies", "networks"},
+		},
+		{
+			name: "networks 401", set: func(f *accessFakes) { f.networkErr = unauthorized },
+			wantErr:    "netbird api: 401: bad token (hint: token invalid or expired)",
+			wantCancel: []string{"peer", "policies", "routes"},
 		},
 	}
 	for _, tt := range tests {
@@ -284,6 +353,21 @@ func TestGetPeerAccessToolFailure(t *testing.T) {
 	}
 }
 
+func TestGetPeerAccessToolNetworkSubCallFailure(t *testing.T) {
+	t.Parallel()
+	f := newAccessFakes()
+	f.networks = []netbird.Network{{ID: "net-42", Routers: []string{"rt"}}}
+	f.subErr = &netbird.APIError{Status: 500, Message: "boom"}
+	cs, logs := connectFake(t, f.client())
+	res, text := callTool(t, cs, "get_peer_access", map[string]any{"peer_id": accessPeerID})
+	if !res.IsError || !strings.Contains(text, "network net-42") {
+		t.Errorf("IsError=%v text=%q, want error naming network net-42", res.IsError, text)
+	}
+	if strings.Contains(text, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
+		t.Errorf("sentinel leaked: text=%q logs=%s", text, logs)
+	}
+}
+
 func TestGetPeerAccessToolReturnsOriginalError(t *testing.T) {
 	t.Parallel()
 	want := &netbird.APIError{Status: 500, Message: "boom"}
@@ -302,7 +386,7 @@ func TestGetPeerAccessToolSchema(t *testing.T) {
 	if tool.Name != "get_peer_access" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	const wantDesc = "Describes one NetBird peer's access: the access policies whose rules apply to it (with direction and the other side) and the network routes it is part of. Disabled policies, rules and routes are included with their enabled flag. Posture checks are not evaluated."
+	const wantDesc = "Describes one NetBird peer's access: the access policies whose rules apply to it (with direction and the other side), the network routes it is part of, and the networks it routes for or can reach (the routers it is part of and the resources it can reach, with the policies granting that). Disabled policies, rules, routes and routers are included with their enabled flag. Only enabled accept rules of enabled policies count for network resource reach. Posture checks are not evaluated."
 	if tool.Description != wantDesc {
 		t.Errorf("description = %q", tool.Description)
 	}

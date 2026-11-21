@@ -7,9 +7,31 @@ import (
 )
 
 type peerAccessOutput struct {
-	Peer     accessPeerOutput     `json:"peer"`
-	Policies []accessPolicyOutput `json:"policies"`
-	Routes   []accessRouteOutput  `json:"routes"`
+	Peer     accessPeerOutput      `json:"peer"`
+	Policies []accessPolicyOutput  `json:"policies"`
+	Routes   []accessRouteOutput   `json:"routes"`
+	Networks []accessNetworkOutput `json:"networks"`
+}
+
+type accessNetworkOutput struct {
+	ID        string                        `json:"id"`
+	Name      string                        `json:"name"`
+	Routers   []accessNetworkRouterOutput   `json:"routers"`
+	Resources []accessNetworkResourceOutput `json:"resources"`
+}
+
+type accessNetworkRouterOutput struct {
+	ID      string `json:"id"`
+	Enabled bool   `json:"enabled"`
+}
+
+type accessNetworkResourceOutput struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Address     string   `json:"address"`
+	Type        string   `json:"type"`
+	Enabled     bool     `json:"enabled"`
+	ViaPolicies []string `json:"via_policies"`
 }
 
 type accessPeerOutput struct {
@@ -181,10 +203,74 @@ func matchRoutes(peer netbird.Peer, routes []netbird.Route) []accessRouteOutput 
 	return out
 }
 
-func toPeerAccessOutput(peer netbird.Peer, policies []netbird.Policy, routes []netbird.Route) peerAccessOutput {
+func matchNetworks(peer netbird.Peer, policies []netbird.Policy, networks []netbird.Network, routers [][]netbird.NetworkRouter, resources [][]netbird.NetworkResource) []accessNetworkOutput {
+	groupIDs := peerGroupIDs(peer)
+	out := make([]accessNetworkOutput, 0, len(networks))
+	for i, n := range networks {
+		matched := accessNetworkOutput{
+			ID: n.ID, Name: n.Name,
+			Routers:   []accessNetworkRouterOutput{},
+			Resources: []accessNetworkResourceOutput{},
+		}
+		for _, r := range routers[i] {
+			if (r.Peer != "" && r.Peer == peer.ID) || anyID(groupIDs, r.PeerGroups) {
+				matched.Routers = append(matched.Routers, accessNetworkRouterOutput{ID: r.ID, Enabled: r.Enabled})
+			}
+		}
+		for _, res := range resources[i] {
+			via := reachingPolicies(peer.ID, groupIDs, policies, res)
+			if len(via) == 0 {
+				continue
+			}
+			matched.Resources = append(matched.Resources, accessNetworkResourceOutput{
+				ID: res.ID, Name: res.Name, Address: res.Address, Type: res.Type, Enabled: res.Enabled,
+				ViaPolicies: via,
+			})
+		}
+		if len(matched.Routers) == 0 && len(matched.Resources) == 0 {
+			continue
+		}
+		out = append(out, matched)
+	}
+	return out
+}
+
+func reachingPolicies(peerID string, groupIDs map[string]bool, policies []netbird.Policy, res netbird.NetworkResource) []string {
+	resGroupIDs := make(map[string]bool, len(res.Groups))
+	for _, g := range res.Groups {
+		resGroupIDs[g.ID] = true
+	}
+	via := []string{}
+	for _, p := range policies {
+		if !p.Enabled {
+			continue
+		}
+		for _, r := range p.Rules {
+			if ruleReaches(peerID, groupIDs, resGroupIDs, res.ID, r) {
+				via = append(via, p.ID)
+				break
+			}
+		}
+	}
+	return via
+}
+
+func ruleReaches(peerID string, groupIDs, resGroupIDs map[string]bool, resID string, r netbird.PolicyRule) bool {
+	if !r.Enabled || r.Action != "accept" {
+		return false
+	}
+	peerSource := anyGroup(groupIDs, r.Sources) || isPeerResource(peerID, r.SourceResource)
+	peerDest := anyGroup(groupIDs, r.Destinations) || isPeerResource(peerID, r.DestinationResource)
+	resSource := anyGroup(resGroupIDs, r.Sources) || (r.SourceResource != nil && r.SourceResource.ID == resID)
+	resDest := anyGroup(resGroupIDs, r.Destinations) || (r.DestinationResource != nil && r.DestinationResource.ID == resID)
+	return (peerSource && resDest) || (r.Bidirectional && peerDest && resSource)
+}
+
+func toPeerAccessOutput(peer netbird.Peer, policies []netbird.Policy, routes []netbird.Route, networks []netbird.Network, routers [][]netbird.NetworkRouter, resources [][]netbird.NetworkResource) peerAccessOutput {
 	return peerAccessOutput{
 		Peer:     toAccessPeerOutput(peer),
 		Policies: matchPolicies(peer, policies), Routes: matchRoutes(peer, routes),
+		Networks: matchNetworks(peer, policies, networks, routers, resources),
 	}
 }
 

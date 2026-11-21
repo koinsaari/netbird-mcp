@@ -13,20 +13,17 @@ type peerAccessAPI interface {
 	peerAPI
 	policyAPI
 	routeAPI
+	networkAPI
 }
 
 type getPeerAccessInput struct {
 	PeerID string `json:"peer_id" jsonschema:"the 20-character NetBird peer ID, as returned by list_peers"`
 }
 
-// getPeerAccess builds the get_peer_access tool definition and its handler.
-// The handler validates the ID, fetches the peer, policies and routes
-// concurrently and joins them. Any failing call fails the tool with that
-// call's own error.
 func getPeerAccess(c peerAccessAPI) (*mcp.Tool, mcp.ToolHandlerFor[getPeerAccessInput, peerAccessOutput]) {
 	tool := &mcp.Tool{
 		Name:        "get_peer_access",
-		Description: "Describes one NetBird peer's access: the access policies whose rules apply to it (with direction and the other side) and the network routes it is part of. Disabled policies, rules and routes are included with their enabled flag. Posture checks are not evaluated.",
+		Description: "Describes one NetBird peer's access: the access policies whose rules apply to it (with direction and the other side), the network routes it is part of, and the networks it routes for or can reach (the routers it is part of and the resources it can reach, with the policies granting that). Disabled policies, rules, routes and routers are included with their enabled flag. Only enabled accept rules of enabled policies count for network resource reach. Posture checks are not evaluated.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}
 	handler := func(ctx context.Context, _ *mcp.CallToolRequest, in getPeerAccessInput) (*mcp.CallToolResult, peerAccessOutput, error) {
@@ -34,12 +31,13 @@ func getPeerAccess(c peerAccessAPI) (*mcp.Tool, mcp.ToolHandlerFor[getPeerAccess
 			return nil, peerAccessOutput{}, errInvalidPeerID
 		}
 		var (
-			peer     netbird.Peer
-			policies []netbird.Policy
-			routes   []netbird.Route
+			peer      netbird.Peer
+			policies  []netbird.Policy
+			routes    []netbird.Route
+			networks  []netbird.Network
+			routers   [][]netbird.NetworkRouter
+			resources [][]netbird.NetworkResource
 		)
-		// errgroup keeps the first error, and a sibling only sees
-		// context.Canceled after that error is recorded, so it can't replace it.
 		g, gctx := errgroup.WithContext(ctx)
 		g.Go(func() (err error) {
 			peer, err = c.GetPeer(gctx, in.PeerID)
@@ -53,10 +51,14 @@ func getPeerAccess(c peerAccessAPI) (*mcp.Tool, mcp.ToolHandlerFor[getPeerAccess
 			routes, err = c.ListRoutes(gctx)
 			return err
 		})
+		g.Go(func() (err error) {
+			networks, routers, resources, err = fetchNetworks(gctx, c)
+			return err
+		})
 		if err := g.Wait(); err != nil {
 			return nil, peerAccessOutput{}, err
 		}
-		return nil, toPeerAccessOutput(peer, policies, routes), nil
+		return nil, toPeerAccessOutput(peer, policies, routes, networks, routers, resources), nil
 	}
 	return tool, handler
 }
