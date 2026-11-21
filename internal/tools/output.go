@@ -21,3 +21,11 @@ func nonNil(s []string) []string {
 	}
 	return s
 }
+
+func toLocalFlagsOutput(f *netbird.PeerLocalFlags) *localFlagsOutput {
+	if f == nil {
+		return nil
+	}
+	o := localFlagsOutput(*f)
+	return &o
+}

@@ -239,14 +239,228 @@ func TestMatchRoutes(t *testing.T) {
 	}
 }
 
+func accept(src, dst []netbird.Group) netbird.PolicyRule {
+	return netbird.PolicyRule{Enabled: true, Action: "accept", Sources: src, Destinations: dst}
+}
+
+func policyOf(id string, enabled bool, rules ...netbird.PolicyRule) netbird.Policy {
+	return netbird.Policy{ID: id, Enabled: enabled, Rules: rules}
+}
+
+func TestMatchNetworks(t *testing.T) {
+	mine := []netbird.Group{grp("g1", "devs")}
+	srvGroup := []netbird.Group{grp("g9", "servers")}
+	net1 := []netbird.Network{{ID: "n1", Name: "office"}}
+	resGroup := func(id string, groups ...string) netbird.NetworkResource {
+		r := netbird.NetworkResource{ID: id, Name: id, Address: "a-" + id, Type: "host", Enabled: true}
+		for _, g := range groups {
+			r.Groups = append(r.Groups, grp(g, g))
+		}
+		return r
+	}
+	oneRes := func(r netbird.NetworkResource) [][]netbird.NetworkResource { return [][]netbird.NetworkResource{{r}} }
+	oneRouter := func(r netbird.NetworkRouter) [][]netbird.NetworkRouter { return [][]netbird.NetworkRouter{{r}} }
+	reach := func(via ...string) []accessNetworkOutput {
+		return []accessNetworkOutput{{ID: "n1", Name: "office", Routers: []accessNetworkRouterOutput{},
+			Resources: []accessNetworkResourceOutput{{ID: "r1", Name: "r1", Address: "a-r1", Type: "host", Enabled: true,
+				ViaPolicies: via}}}}
+	}
+	bidi := accept(srvGroup, mine)
+	bidi.Bidirectional = true
+	disabledRule := accept(mine, srvGroup)
+	disabledRule.Enabled = false
+	dropRule := accept(mine, srvGroup)
+	dropRule.Action = "drop"
+	destRes := accept(mine, nil)
+	destRes.DestinationResource = &netbird.Resource{ID: "r1", Type: "host"}
+	peerSrc := accept(nil, srvGroup)
+	peerSrc.SourceResource = peerRes("p1")
+	oneWay := accept(srvGroup, mine)
+	peerTypeDest := accept(mine, nil)
+	peerTypeDest.DestinationResource = &netbird.Resource{ID: "r1", Type: "peer"}
+
+	tests := []struct {
+		name      string
+		policies  []netbird.Policy
+		networks  []netbird.Network
+		routers   [][]netbird.NetworkRouter
+		resources [][]netbird.NetworkResource
+		want      []accessNetworkOutput
+	}{
+		{name: "nil inputs", want: []accessNetworkOutput{}},
+		{
+			name: "router by peer", networks: net1, routers: oneRouter(netbird.NetworkRouter{ID: "rt", Peer: "p1", Enabled: true}),
+			resources: [][]netbird.NetworkResource{nil},
+			want: []accessNetworkOutput{{ID: "n1", Name: "office", Resources: []accessNetworkResourceOutput{},
+				Routers: []accessNetworkRouterOutput{{ID: "rt", Enabled: true}}}},
+		},
+		{
+			name: "router by group", networks: net1, routers: oneRouter(netbird.NetworkRouter{ID: "rt", PeerGroups: []string{"g8", "g2"}, Enabled: true}),
+			resources: [][]netbird.NetworkResource{nil},
+			want: []accessNetworkOutput{{ID: "n1", Name: "office", Resources: []accessNetworkResourceOutput{},
+				Routers: []accessNetworkRouterOutput{{ID: "rt", Enabled: true}}}},
+		},
+		{
+			name: "disabled router listed", networks: net1, routers: oneRouter(netbird.NetworkRouter{ID: "rt", Peer: "p1"}),
+			resources: [][]netbird.NetworkResource{nil},
+			want: []accessNetworkOutput{{ID: "n1", Name: "office", Resources: []accessNetworkResourceOutput{},
+				Routers: []accessNetworkRouterOutput{{ID: "rt"}}}},
+		},
+		{
+			name: "other router omitted", networks: net1, routers: oneRouter(netbird.NetworkRouter{ID: "rt", Peer: "p2", PeerGroups: []string{"g8"}}),
+			resources: [][]netbird.NetworkResource{nil}, want: []accessNetworkOutput{},
+		},
+		{
+			name: "via destination resource", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", true, destRes)},
+			resources: oneRes(resGroup("r1")), want: reach("pol"),
+		},
+		{
+			name: "peer-type resource with same id does not count", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", true, peerTypeDest)},
+			resources: oneRes(resGroup("r1", "g9")), want: []accessNetworkOutput{},
+		},
+		{
+			name: "via destination group", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", true, accept(mine, srvGroup))},
+			resources: oneRes(resGroup("r1", "g9")), want: reach("pol"),
+		},
+		{
+			name: "peer as source resource", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", true, peerSrc)},
+			resources: oneRes(resGroup("r1", "g9")), want: reach("pol"),
+		},
+		{
+			name: "bidirectional reverse reachable", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", true, bidi)},
+			resources: oneRes(resGroup("r1", "g9")), want: reach("pol"),
+		},
+		{
+			name: "one-way reverse not reachable", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", true, oneWay)},
+			resources: oneRes(resGroup("r1", "g9")), want: []accessNetworkOutput{},
+		},
+		{
+			name: "disabled policy ignored", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", false, accept(mine, srvGroup))},
+			resources: oneRes(resGroup("r1", "g9")), want: []accessNetworkOutput{},
+		},
+		{
+			name: "disabled rule ignored", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", true, disabledRule)},
+			resources: oneRes(resGroup("r1", "g9")), want: []accessNetworkOutput{},
+		},
+		{
+			name: "drop action ignored", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", true, dropRule)},
+			resources: oneRes(resGroup("r1", "g9")), want: []accessNetworkOutput{},
+		},
+		{
+			name: "two policies listed once each in order", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies: []netbird.Policy{
+				policyOf("b", true, accept(mine, srvGroup), accept(mine, srvGroup)),
+				policyOf("skip", true, accept(srvGroup, srvGroup)),
+				policyOf("a", true, destRes),
+			},
+			resources: oneRes(resGroup("r1", "g9")), want: reach("b", "a"),
+		},
+		{
+			name: "disabled resource listed", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies: []netbird.Policy{policyOf("pol", true, accept(mine, srvGroup))},
+			resources: oneRes(netbird.NetworkResource{ID: "r1", Name: "r1", Address: "a-r1", Type: "host",
+				Groups: []netbird.Group{grp("g9", "g9")}}),
+			want: []accessNetworkOutput{{ID: "n1", Name: "office", Routers: []accessNetworkRouterOutput{},
+				Resources: []accessNetworkResourceOutput{{ID: "r1", Name: "r1", Address: "a-r1", Type: "host",
+					ViaPolicies: []string{"pol"}}}}},
+		},
+		{
+			name:      "router and resources together, unmatched network omitted",
+			networks:  []netbird.Network{{ID: "n1", Name: "office"}, {ID: "n2", Name: "none"}},
+			routers:   [][]netbird.NetworkRouter{{{ID: "rt", Peer: "p1", Enabled: true}}, nil},
+			policies:  []netbird.Policy{policyOf("pol", true, accept(mine, srvGroup))},
+			resources: [][]netbird.NetworkResource{{resGroup("r1", "g9"), resGroup("r2", "g7")}, {resGroup("r3", "g7")}},
+			want: []accessNetworkOutput{{ID: "n1", Name: "office",
+				Routers: []accessNetworkRouterOutput{{ID: "rt", Enabled: true}},
+				Resources: []accessNetworkResourceOutput{{ID: "r1", Name: "r1", Address: "a-r1", Type: "host", Enabled: true,
+					ViaPolicies: []string{"pol"}}}}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchNetworks(testPeer(), tt.policies, tt.networks, tt.routers, tt.resources)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("matchNetworks:\n got %+v\nwant %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToAccessPeerOutput(t *testing.T) {
+	yes := true
+	tests := []struct {
+		name string
+		in   netbird.Peer
+		want accessPeerOutput
+	}{
+		{
+			name: "trimmed fields and groups",
+			in: netbird.Peer{
+				ID: "p1", Name: "laptop", IP: "100.64.0.1", DNSLabel: "laptop.netbird.cloud", Connected: true,
+				UserID: "u1", OS: "linux", Hostname: "h",
+				Groups: []netbird.Group{{ID: "g1", Name: "devs", PeersCount: 3}, {ID: "g2", Name: "all"}},
+			},
+			want: accessPeerOutput{
+				ID: "p1", Name: "laptop", IP: "100.64.0.1", DNSLabel: "laptop.netbird.cloud", Connected: true,
+				Groups: []groupOutput{{ID: "g1", Name: "devs"}, {ID: "g2", Name: "all"}},
+			},
+		},
+		{
+			name: "nil groups become empty list",
+			in:   netbird.Peer{ID: "p1"},
+			want: accessPeerOutput{ID: "p1", Groups: []groupOutput{}},
+		},
+		{
+			name: "local flags present",
+			in:   netbird.Peer{ID: "p1", LocalFlags: &netbird.PeerLocalFlags{ServerSSHAllowed: &yes}},
+			want: accessPeerOutput{ID: "p1", Groups: []groupOutput{}, LocalFlags: &localFlagsOutput{ServerSSHAllowed: &yes}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := toAccessPeerOutput(tt.in); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAccessPeerOutputJSON(t *testing.T) {
+	b, err := json.Marshal(toAccessPeerOutput(netbird.Peer{ID: "p1"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	if string(m["groups"]) != "[]" {
+		t.Errorf("groups = %s, want []", m["groups"])
+	}
+	if _, has := m["local_flags"]; has {
+		t.Errorf("local_flags present without flags: %s", b)
+	}
+	for _, k := range []string{"id", "name", "ip", "dns_label", "connected", "groups"} {
+		if _, has := m[k]; !has {
+			t.Errorf("missing key %s: %s", k, b)
+		}
+	}
+}
+
 func TestToPeerAccessOutput(t *testing.T) {
 	peer := testPeer()
-	got := toPeerAccessOutput(peer, nil, nil)
+	got := toPeerAccessOutput(peer, nil, nil, nil, nil, nil)
 	if got.Peer.ID != "p1" || got.Peer.Name != "laptop" {
-		t.Errorf("peer detail not mapped: %+v", got.Peer)
-	}
-	if got.Peer.UserID != "u1" {
-		t.Errorf("peer user_id = %q, want u1", got.Peer.UserID)
+		t.Errorf("peer not mapped: %+v", got.Peer)
 	}
 	if len(got.Peer.Groups) != 2 || got.Peer.Groups[0].ID != "g1" || got.Peer.Groups[1].ID != "g2" {
 		t.Errorf("peer groups = %+v", got.Peer.Groups)
@@ -254,7 +468,7 @@ func TestToPeerAccessOutput(t *testing.T) {
 
 	policies := []netbird.Policy{{ID: "a", Rules: []netbird.PolicyRule{{Sources: []netbird.Group{grp("g1", "devs")}}}}}
 	routes := []netbird.Route{{ID: "r", Peer: "p1"}}
-	got = toPeerAccessOutput(peer, policies, routes)
+	got = toPeerAccessOutput(peer, policies, routes, nil, nil, nil)
 	if len(got.Policies) != 1 || got.Policies[0].ID != "a" || len(got.Routes) != 1 || got.Routes[0].ID != "r" {
 		t.Errorf("policies/routes not joined: %+v %+v", got.Policies, got.Routes)
 	}
@@ -265,7 +479,7 @@ func TestPeerAccessOutputJSON(t *testing.T) {
 		policies := []netbird.Policy{{ID: "a", Rules: []netbird.PolicyRule{{
 			Sources: []netbird.Group{grp("g1", "devs")}, DestinationResource: &netbird.Resource{ID: "d1", Type: "host"},
 		}}}}
-		b, err := json.Marshal(toPeerAccessOutput(testPeer(), policies, nil))
+		b, err := json.Marshal(toPeerAccessOutput(testPeer(), policies, nil, nil, nil, nil))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -278,7 +492,7 @@ func TestPeerAccessOutputJSON(t *testing.T) {
 	})
 
 	t.Run("empty lists encode as [] not null", func(t *testing.T) {
-		b, err := json.Marshal(toPeerAccessOutput(netbird.Peer{ID: "p1"}, nil, nil))
+		b, err := json.Marshal(toPeerAccessOutput(netbird.Peer{ID: "p1"}, nil, nil, nil, nil, nil))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -286,7 +500,7 @@ func TestPeerAccessOutputJSON(t *testing.T) {
 		if err := json.Unmarshal(b, &m); err != nil {
 			t.Fatal(err)
 		}
-		for _, k := range []string{"policies", "routes"} {
+		for _, k := range []string{"policies", "routes", "networks"} {
 			if string(m[k]) != "[]" {
 				t.Errorf("%s = %s, want []", k, m[k])
 			}
@@ -296,7 +510,7 @@ func TestPeerAccessOutputJSON(t *testing.T) {
 	t.Run("optional keys omitted and other_side always present", func(t *testing.T) {
 		policies := []netbird.Policy{{ID: "a", Rules: []netbird.PolicyRule{{Sources: []netbird.Group{grp("g1", "devs")}}}}}
 		routes := []netbird.Route{{ID: "r", Peer: "p1"}}
-		b, err := json.Marshal(toPeerAccessOutput(testPeer(), policies, routes))
+		b, err := json.Marshal(toPeerAccessOutput(testPeer(), policies, routes, nil, nil, nil))
 		if err != nil {
 			t.Fatal(err)
 		}

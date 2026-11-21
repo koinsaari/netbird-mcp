@@ -60,38 +60,46 @@ func listNetworks(c networkAPI) (*mcp.Tool, mcp.ToolHandlerFor[listNetworksInput
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}
 	handler := func(ctx context.Context, _ *mcp.CallToolRequest, _ listNetworksInput) (*mcp.CallToolResult, listNetworksOutput, error) {
-		networks, err := c.ListNetworks(ctx)
+		networks, routers, resources, err := fetchNetworks(ctx, c)
 		if err != nil {
-			return nil, listNetworksOutput{}, err
-		}
-		routers := make([][]netbird.NetworkRouter, len(networks))
-		resources := make([][]netbird.NetworkResource, len(networks))
-		g, gctx := errgroup.WithContext(ctx)
-		g.SetLimit(networkFanOut)
-		for i, n := range networks {
-			if len(n.Routers) > 0 {
-				g.Go(func() (err error) {
-					if routers[i], err = c.ListNetworkRouters(gctx, n.ID); err != nil {
-						return fmt.Errorf("network %s: %w", n.ID, err)
-					}
-					return nil
-				})
-			}
-			if len(n.Resources) > 0 {
-				g.Go(func() (err error) {
-					if resources[i], err = c.ListNetworkResources(gctx, n.ID); err != nil {
-						return fmt.Errorf("network %s: %w", n.ID, err)
-					}
-					return nil
-				})
-			}
-		}
-		if err := g.Wait(); err != nil {
 			return nil, listNetworksOutput{}, err
 		}
 		return nil, toListNetworksOutput(networks, routers, resources), nil
 	}
 	return tool, handler
+}
+
+func fetchNetworks(ctx context.Context, c networkAPI) ([]netbird.Network, [][]netbird.NetworkRouter, [][]netbird.NetworkResource, error) {
+	networks, err := c.ListNetworks(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	routers := make([][]netbird.NetworkRouter, len(networks))
+	resources := make([][]netbird.NetworkResource, len(networks))
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(networkFanOut)
+	for i, n := range networks {
+		if len(n.Routers) > 0 {
+			g.Go(func() (err error) {
+				if routers[i], err = c.ListNetworkRouters(gctx, n.ID); err != nil {
+					return fmt.Errorf("network %s: %w", n.ID, err)
+				}
+				return nil
+			})
+		}
+		if len(n.Resources) > 0 {
+			g.Go(func() (err error) {
+				if resources[i], err = c.ListNetworkResources(gctx, n.ID); err != nil {
+					return fmt.Errorf("network %s: %w", n.ID, err)
+				}
+				return nil
+			})
+		}
+	}
+	if err := g.Wait(); err != nil {
+		return nil, nil, nil, err
+	}
+	return networks, routers, resources, nil
 }
 
 func toListNetworksOutput(networks []netbird.Network, routers [][]netbird.NetworkRouter, resources [][]netbird.NetworkResource) listNetworksOutput {
