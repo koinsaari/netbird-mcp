@@ -15,11 +15,18 @@ func toGroupOutputs(groups []netbird.Group) []groupOutput {
 	return out
 }
 
-func nonNil(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
+type localFlagsOutput struct {
+	RosenpassEnabled      *bool `json:"rosenpass_enabled,omitempty"`
+	RosenpassPermissive   *bool `json:"rosenpass_permissive,omitempty"`
+	ServerSSHAllowed      *bool `json:"server_ssh_allowed,omitempty"`
+	RemoteJobsAllowed     *bool `json:"remote_jobs_allowed,omitempty"`
+	DisableClientRoutes   *bool `json:"disable_client_routes,omitempty"`
+	DisableServerRoutes   *bool `json:"disable_server_routes,omitempty"`
+	DisableDNS            *bool `json:"disable_dns,omitempty"`
+	DisableFirewall       *bool `json:"disable_firewall,omitempty"`
+	BlockLANAccess        *bool `json:"block_lan_access,omitempty"`
+	BlockInbound          *bool `json:"block_inbound,omitempty"`
+	LazyConnectionEnabled *bool `json:"lazy_connection_enabled,omitempty"`
 }
 
 func toLocalFlagsOutput(f *netbird.PeerLocalFlags) *localFlagsOutput {
@@ -28,4 +35,11 @@ func toLocalFlagsOutput(f *netbird.PeerLocalFlags) *localFlagsOutput {
 	}
 	o := localFlagsOutput(*f)
 	return &o
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
