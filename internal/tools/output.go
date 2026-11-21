@@ -4,13 +4,29 @@ import "github.com/koinsaari/netbird-mcp/internal/netbird"
 
 type groupOutput struct {
 	ID   string `json:"id"`
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 }
 
 func toGroupOutputs(groups []netbird.Group) []groupOutput {
 	out := make([]groupOutput, 0, len(groups))
 	for _, g := range groups {
 		out = append(out, groupOutput{ID: g.ID, Name: g.Name})
+	}
+	return out
+}
+
+func groupNamesByID(groups []netbird.Group) map[string]string {
+	names := make(map[string]string, len(groups))
+	for _, g := range groups {
+		names[g.ID] = g.Name
+	}
+	return names
+}
+
+func toGroupRefs(ids []string, names map[string]string) []groupOutput {
+	out := make([]groupOutput, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, groupOutput{ID: id, Name: names[id]})
 	}
 	return out
 }

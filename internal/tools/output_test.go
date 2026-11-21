@@ -8,6 +8,66 @@ import (
 	"github.com/koinsaari/netbird-mcp/internal/netbird"
 )
 
+func TestGroupNamesByID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		groups []netbird.Group
+		want   map[string]string
+	}{
+		{name: "nil", want: map[string]string{}},
+		{
+			name:   "maps ids to names",
+			groups: []netbird.Group{{ID: "g1", Name: "devs"}, {ID: "g2", Name: "ops"}},
+			want:   map[string]string{"g1": "devs", "g2": "ops"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := groupNamesByID(tt.groups)
+			if got == nil || !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("groupNamesByID = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToGroupRefs(t *testing.T) {
+	t.Parallel()
+	names := map[string]string{"g1": "devs", "g2": "ops"}
+	tests := []struct {
+		name  string
+		ids   []string
+		names map[string]string
+		want  []groupOutput
+	}{
+		{name: "nil ids", names: names, want: []groupOutput{}},
+		{name: "nil names", ids: []string{"g1"}, want: []groupOutput{{ID: "g1"}}},
+		{
+			name:  "keeps order",
+			ids:   []string{"g2", "g1"},
+			names: names,
+			want:  []groupOutput{{ID: "g2", Name: "ops"}, {ID: "g1", Name: "devs"}},
+		},
+		{
+			name:  "unknown id has empty name",
+			ids:   []string{"gone", "g1"},
+			names: names,
+			want:  []groupOutput{{ID: "gone"}, {ID: "g1", Name: "devs"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := toGroupRefs(tt.ids, tt.names)
+			if got == nil || !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("toGroupRefs = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestToGroupOutputs(t *testing.T) {
 	t.Parallel()
 	if got := toGroupOutputs(nil); got == nil || len(got) != 0 {
