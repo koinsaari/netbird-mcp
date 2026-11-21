@@ -15,8 +15,9 @@ const maxMessageLen = 512
 var patFingerprint = regexp.MustCompile(`(?i)\bpat:\s*\S+`)
 
 type APIError struct {
-	Status  int
-	Message string
+	Status       int
+	Message      string
+	invalidToken bool
 }
 
 func (e *APIError) Error() string {
@@ -24,7 +25,11 @@ func (e *APIError) Error() string {
 }
 
 func (e *APIError) InvalidToken() bool {
-	return strings.HasPrefix(strings.ToLower(e.Message), "invalid token")
+	return e.invalidToken || isInvalidTokenMessage(e.Message)
+}
+
+func isInvalidTokenMessage(msg string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(msg)), "invalid token")
 }
 
 func newAPIError(resp *http.Response, token string) *APIError {
@@ -39,7 +44,7 @@ func newAPIError(resp *http.Response, token string) *APIError {
 	if msg == "" {
 		msg = http.StatusText(resp.StatusCode)
 	}
-	return &APIError{Status: resp.StatusCode, Message: msg}
+	return &APIError{Status: resp.StatusCode, Message: msg, invalidToken: isInvalidTokenMessage(body.Message)}
 }
 
 func sanitize(msg, token string) string {

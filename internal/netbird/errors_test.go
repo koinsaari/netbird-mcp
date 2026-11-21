@@ -28,7 +28,7 @@ func TestAPIErrorRedactsPATFingerprint(t *testing.T) {
 			wantInvalid: true,
 		},
 		{name: "no pat untouched", body: `{"message":"peer not found"}`, wantMessage: "peer not found"},
-		{name: "raw token dropped", body: `{"message":"invalid token nbp_SENTINEL"}`, wantMessage: "Not Found"},
+		{name: "raw token dropped", body: `{"message":"invalid token nbp_SENTINEL"}`, wantMessage: "Not Found", wantInvalid: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
