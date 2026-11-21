@@ -7,10 +7,11 @@ import (
 )
 
 type peerAccessOutput struct {
-	Peer     accessPeerOutput      `json:"peer"`
-	Policies []accessPolicyOutput  `json:"policies"`
-	Routes   []accessRouteOutput   `json:"routes"`
-	Networks []accessNetworkOutput `json:"networks"`
+	Peer          accessPeerOutput      `json:"peer"`
+	Policies      []accessPolicyOutput  `json:"policies"`
+	Routes        []accessRouteOutput   `json:"routes"`
+	Networks      []accessNetworkOutput `json:"networks"`
+	NetworksError string                `json:"networks_error,omitempty"`
 }
 
 type accessNetworkOutput struct {
@@ -154,6 +155,10 @@ func isPeerResource(peerID string, r *netbird.Resource) bool {
 	return r != nil && r.Type == "peer" && r.ID == peerID
 }
 
+func isNetworkResource(resID string, r *netbird.Resource) bool {
+	return r != nil && r.Type != "peer" && r.ID == resID
+}
+
 func mergeGroups(a, b []netbird.Group) []ruleGroupOutput {
 	out := make([]ruleGroupOutput, 0, len(a)+len(b))
 	seen := make(map[string]bool, len(a)+len(b))
@@ -261,8 +266,8 @@ func ruleReaches(peerID string, groupIDs, resGroupIDs map[string]bool, resID str
 	}
 	peerSource := anyGroup(groupIDs, r.Sources) || isPeerResource(peerID, r.SourceResource)
 	peerDest := anyGroup(groupIDs, r.Destinations) || isPeerResource(peerID, r.DestinationResource)
-	resSource := anyGroup(resGroupIDs, r.Sources) || (r.SourceResource != nil && r.SourceResource.ID == resID)
-	resDest := anyGroup(resGroupIDs, r.Destinations) || (r.DestinationResource != nil && r.DestinationResource.ID == resID)
+	resSource := anyGroup(resGroupIDs, r.Sources) || isNetworkResource(resID, r.SourceResource)
+	resDest := anyGroup(resGroupIDs, r.Destinations) || isNetworkResource(resID, r.DestinationResource)
 	return (peerSource && resDest) || (r.Bidirectional && peerDest && resSource)
 }
 
@@ -275,13 +280,8 @@ func toPeerAccessOutput(peer netbird.Peer, policies []netbird.Policy, routes []n
 }
 
 func toAccessPeerOutput(p netbird.Peer) accessPeerOutput {
-	var flags *localFlagsOutput
-	if f := p.LocalFlags; f != nil {
-		o := localFlagsOutput(*f)
-		flags = &o
-	}
 	return accessPeerOutput{
 		ID: p.ID, Name: p.Name, IP: p.IP, DNSLabel: p.DNSLabel, Connected: p.Connected,
-		Groups: toGroupOutputs(p.Groups), LocalFlags: flags,
+		Groups: toGroupOutputs(p.Groups), LocalFlags: toLocalFlagsOutput(p.LocalFlags),
 	}
 }

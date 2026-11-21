@@ -188,11 +188,6 @@ func toPeerDetailOutput(p netbird.Peer) peerDetailOutput {
 			addrs = append(addrs, networkAddressOutput{NetIP: a.NetIP, MAC: a.MAC})
 		}
 	}
-	var flags *localFlagsOutput
-	if f := p.LocalFlags; f != nil {
-		o := localFlagsOutput(*f)
-		flags = &o
-	}
 	return peerDetailOutput{
 		ID: p.ID, Name: p.Name, CreatedAt: p.CreatedAt, IP: p.IP, IPv6: p.IPv6, NetworkAddresses: addrs,
 		ConnectionIP: p.ConnectionIP, Connected: p.Connected, LastSeen: p.LastSeen, OS: p.OS,
@@ -202,6 +197,6 @@ func toPeerDetailOutput(p netbird.Peer) peerDetailOutput {
 		LastLogin: p.LastLogin, InactivityExpirationEnabled: p.InactivityExpirationEnabled,
 		ApprovalRequired: p.ApprovalRequired, DisapprovalReason: p.DisapprovalReason,
 		CountryCode: p.CountryCode, CityName: p.CityName, SerialNumber: p.SerialNumber,
-		ExtraDNSLabels: labels, Ephemeral: p.Ephemeral, LocalFlags: flags,
+		ExtraDNSLabels: labels, Ephemeral: p.Ephemeral, LocalFlags: toLocalFlagsOutput(p.LocalFlags),
 	}
 }

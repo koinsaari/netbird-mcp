@@ -15,6 +15,7 @@ import (
 
 const accessPeerID = "cdl0ajd5jtbs73abcdef"
 const barrierTimeout = 2 * time.Second
+const accessConcurrentCalls = 4
 
 type accessFakes struct {
 	peer     netbird.Peer
@@ -24,7 +25,7 @@ type accessFakes struct {
 	routers  map[string][]netbird.NetworkRouter
 	resrcs   map[string][]netbird.NetworkResource
 
-	peerErr, policyErr, routeErr, networkErr, subErr error
+	peerErr, policyErr, routeErr, networkErr, subErr, resourceErr error
 
 	arrived    atomic.Int32
 	all        chan struct{}
@@ -40,11 +41,11 @@ type accessFakes struct {
 func newAccessFakes() *accessFakes { return &accessFakes{all: make(chan struct{})} }
 
 func (f *accessFakes) failing() bool {
-	return f.peerErr != nil || f.policyErr != nil || f.routeErr != nil || f.networkErr != nil
+	return f.peerErr != nil || f.policyErr != nil || f.routeErr != nil
 }
 
 func (f *accessFakes) call(ctx context.Context, name string, own error) error {
-	if f.arrived.Add(1) == 4 {
+	if f.arrived.Add(1) == accessConcurrentCalls {
 		f.once.Do(func() { close(f.all) })
 	}
 	select {
@@ -127,6 +128,9 @@ func (a accessNetworkFake) ListNetworkRouters(_ context.Context, id string) ([]n
 }
 
 func (a accessNetworkFake) ListNetworkResources(_ context.Context, id string) ([]netbird.NetworkResource, error) {
+	if a.f.resourceErr != nil {
+		return nil, a.f.resourceErr
+	}
 	return a.f.resrcs[id], nil
 }
 
@@ -322,11 +326,6 @@ func TestGetPeerAccessToolFailure(t *testing.T) {
 			wantErr:    "netbird api: 401: bad token (hint: token invalid or expired)",
 			wantCancel: []string{"peer", "policies", "networks"},
 		},
-		{
-			name: "networks 401", set: func(f *accessFakes) { f.networkErr = unauthorized },
-			wantErr:    "netbird api: 401: bad token (hint: token invalid or expired)",
-			wantCancel: []string{"peer", "policies", "routes"},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -353,18 +352,73 @@ func TestGetPeerAccessToolFailure(t *testing.T) {
 	}
 }
 
-func TestGetPeerAccessToolNetworkSubCallFailure(t *testing.T) {
-	t.Parallel()
-	f := newAccessFakes()
-	f.networks = []netbird.Network{{ID: "net-42", Routers: []string{"rt"}}}
-	f.subErr = &netbird.APIError{Status: 500, Message: "boom"}
-	cs, logs := connectFake(t, f.client())
-	res, text := callTool(t, cs, "get_peer_access", map[string]any{"peer_id": accessPeerID})
-	if !res.IsError || !strings.Contains(text, "network net-42") {
-		t.Errorf("IsError=%v text=%q, want error naming network net-42", res.IsError, text)
+func TestGetPeerAccessToolNetworksDegrade(t *testing.T) {
+	tests := []struct {
+		name    string
+		set     func(f *accessFakes)
+		wantErr []string
+	}{
+		{
+			name:    "networks list 401",
+			set:     func(f *accessFakes) { f.networkErr = &netbird.APIError{Status: 401, Message: "bad token"} },
+			wantErr: []string{"401", "token invalid or expired"},
+		},
+		{
+			name: "routers sub-call 500",
+			set: func(f *accessFakes) {
+				f.networks = []netbird.Network{{ID: "net-42", Routers: []string{"rt"}}}
+				f.subErr = &netbird.APIError{Status: 500, Message: "boom"}
+			},
+			wantErr: []string{"network net-42", "500"},
+		},
+		{
+			name: "resources sub-call 500",
+			set: func(f *accessFakes) {
+				f.networks = []netbird.Network{{ID: "net-43", Resources: []string{"res"}}}
+				f.resourceErr = &netbird.APIError{Status: 500, Message: "boom"}
+			},
+			wantErr: []string{"network net-43", "500"},
+		},
 	}
-	if strings.Contains(text, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
-		t.Errorf("sentinel leaked: text=%q logs=%s", text, logs)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newAccessFakes()
+			f.peer = netbird.Peer{ID: accessPeerID, Name: "laptop", Groups: []netbird.Group{{ID: "g1", Name: "devs"}}}
+			f.policies = []netbird.Policy{{ID: "p1", Name: "ssh", Enabled: true, Rules: []netbird.PolicyRule{{
+				Name: "r1", Enabled: true, Action: "accept", Sources: []netbird.Group{{ID: "g1"}},
+			}}}}
+			f.routes = []netbird.Route{{ID: "r1", NetworkID: "lan", Peer: accessPeerID}}
+			tt.set(f)
+			cs, logs := connectFake(t, f.client())
+			res, text := callTool(t, cs, "get_peer_access", map[string]any{"peer_id": accessPeerID})
+			if res.IsError {
+				t.Fatalf("unexpected tool error: %s", text)
+			}
+			sc, _ := res.StructuredContent.(map[string]any)
+			if peer, _ := sc["peer"].(map[string]any); peer["id"] != accessPeerID {
+				t.Errorf("peer = %#v", sc["peer"])
+			}
+			if pols, _ := sc["policies"].([]any); len(pols) != 1 {
+				t.Errorf("policies = %#v", sc["policies"])
+			}
+			if routes, _ := sc["routes"].([]any); len(routes) != 1 {
+				t.Errorf("routes = %#v", sc["routes"])
+			}
+			nets, ok := sc["networks"].([]any)
+			if !ok || len(nets) != 0 {
+				t.Errorf("networks = %#v, want empty list", sc["networks"])
+			}
+			msg, _ := sc["networks_error"].(string)
+			for _, want := range tt.wantErr {
+				if !strings.Contains(msg, want) {
+					t.Errorf("networks_error = %q, want it to contain %q", msg, want)
+				}
+			}
+			if strings.Contains(text, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
+				t.Errorf("sentinel leaked: text=%q logs=%s", text, logs)
+			}
+		})
 	}
 }
 
@@ -386,7 +440,7 @@ func TestGetPeerAccessToolSchema(t *testing.T) {
 	if tool.Name != "get_peer_access" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	const wantDesc = "Describes one NetBird peer's access: the access policies whose rules apply to it (with direction and the other side), the network routes it is part of, and the networks it routes for or can reach (the routers it is part of and the resources it can reach, with the policies granting that). Disabled policies, rules, routes and routers are included with their enabled flag. Only enabled accept rules of enabled policies count for network resource reach. Posture checks are not evaluated."
+	const wantDesc = "Describes one NetBird peer's access: the access policies whose rules apply to it (with direction and the other side), the network routes it is part of, and the networks it routes for or can reach (the routers it is part of and the resources it can reach, with the policies granting that). Disabled policies, rules, routes, routers and network resources are included with their enabled flag. Only enabled accept rules of enabled policies count for network resource reach. If networks cannot be fetched, networks is empty and networks_error explains why. Posture checks are not evaluated."
 	if tool.Description != wantDesc {
 		t.Errorf("description = %q", tool.Description)
 	}

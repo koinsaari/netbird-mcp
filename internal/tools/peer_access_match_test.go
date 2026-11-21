@@ -276,6 +276,8 @@ func TestMatchNetworks(t *testing.T) {
 	peerSrc := accept(nil, srvGroup)
 	peerSrc.SourceResource = peerRes("p1")
 	oneWay := accept(srvGroup, mine)
+	peerTypeDest := accept(mine, nil)
+	peerTypeDest.DestinationResource = &netbird.Resource{ID: "r1", Type: "peer"}
 
 	tests := []struct {
 		name      string
@@ -312,6 +314,11 @@ func TestMatchNetworks(t *testing.T) {
 			name: "via destination resource", networks: net1, routers: [][]netbird.NetworkRouter{nil},
 			policies:  []netbird.Policy{policyOf("pol", true, destRes)},
 			resources: oneRes(resGroup("r1")), want: reach("pol"),
+		},
+		{
+			name: "peer-type resource with same id does not count", networks: net1, routers: [][]netbird.NetworkRouter{nil},
+			policies:  []netbird.Policy{policyOf("pol", true, peerTypeDest)},
+			resources: oneRes(resGroup("r1", "g9")), want: []accessNetworkOutput{},
 		},
 		{
 			name: "via destination group", networks: net1, routers: [][]netbird.NetworkRouter{nil},
