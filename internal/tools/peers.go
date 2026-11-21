@@ -36,7 +36,7 @@ type peerOutput struct {
 	DNSLabel         string        `json:"dns_label"`
 	IP               string        `json:"ip"`
 	Connected        bool          `json:"connected"`
-	LastSeen         string        `json:"last_seen"` // RFC 3339 string passed through
+	LastSeen         string        `json:"last_seen"`
 	OS               string        `json:"os"`
 	Version          string        `json:"version"`
 	Groups           []groupOutput `json:"groups"`
@@ -45,13 +45,6 @@ type peerOutput struct {
 	ApprovalRequired bool          `json:"approval_required"`
 }
 
-type groupOutput struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-// listPeers builds the list_peers tool definition and its handler. The handler
-// returns raw errors; Register maps them to model-facing messages.
 func listPeers(c peerAPI) (*mcp.Tool, mcp.ToolHandlerFor[listPeersInput, listPeersOutput]) {
 	tool := &mcp.Tool{
 		Name:        "list_peers",
