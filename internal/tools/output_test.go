@@ -145,3 +145,35 @@ func TestPeerNamesByID(t *testing.T) {
 		})
 	}
 }
+
+func TestToPeerRef(t *testing.T) {
+	t.Parallel()
+	names := map[string]string{"p1": "laptop"}
+	tests := []struct {
+		name  string
+		id    string
+		names map[string]string
+		want  string
+	}{
+		{name: "empty id", id: "", names: names, want: "null"},
+		{name: "known", id: "p1", names: names, want: `{"id":"p1","name":"laptop"}`},
+		{name: "unknown has no name", id: "gone", names: names, want: `{"id":"gone"}`},
+		{name: "nil names", id: "p1", want: `{"id":"p1"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ref := toPeerRef(tt.id, tt.names)
+			if (tt.want == "null") != (ref == nil) {
+				t.Fatalf("toPeerRef = %#v, want %s", ref, tt.want)
+			}
+			b, err := json.Marshal(ref)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if string(b) != tt.want {
+				t.Errorf("got %s, want %s", b, tt.want)
+			}
+		})
+	}
+}

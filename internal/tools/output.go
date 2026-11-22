@@ -31,12 +31,24 @@ func toGroupRefs(ids []string, names map[string]string) []groupOutput {
 	return out
 }
 
+type peerRefOutput struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
 func peerNamesByID(peers []netbird.Peer) map[string]string {
 	names := make(map[string]string, len(peers))
 	for _, p := range peers {
 		names[p.ID] = p.Name
 	}
 	return names
+}
+
+func toPeerRef(id string, names map[string]string) *peerRefOutput {
+	if id == "" {
+		return nil
+	}
+	return &peerRefOutput{ID: id, Name: names[id]}
 }
 
 type localFlagsOutput struct {
