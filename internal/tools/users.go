@@ -55,19 +55,17 @@ func listUsers(c listUsersAPI) (*mcp.Tool, mcp.ToolHandlerFor[listUsersInput, li
 		if err != nil {
 			return nil, listUsersOutput{}, err
 		}
-		out := toListUsersOutput(users, names.groups)
-		out.NamesError = names.err
-		return nil, out, nil
+		return nil, toListUsersOutput(users, names), nil
 	}
 	return tool, handler
 }
 
-func toListUsersOutput(users []netbird.User, groupNames map[string]string) listUsersOutput {
-	out := listUsersOutput{Users: make([]userOutput, 0, len(users))}
+func toListUsersOutput(users []netbird.User, names refNames) listUsersOutput {
+	out := listUsersOutput{Users: make([]userOutput, 0, len(users)), NamesError: names.err}
 	for _, u := range users {
 		out.Users = append(out.Users, userOutput{
 			ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role, Status: u.Status,
-			LastLogin: u.LastLogin, AutoGroups: toGroupRefs(u.AutoGroups, groupNames), IsServiceUser: u.IsServiceUser,
+			LastLogin: u.LastLogin, AutoGroups: toGroupRefs(u.AutoGroups, names.groups), IsServiceUser: u.IsServiceUser,
 			IsBlocked: u.IsBlocked, PendingApproval: u.PendingApproval, IsCurrent: u.IsCurrent,
 		})
 	}

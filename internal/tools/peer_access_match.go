@@ -271,11 +271,12 @@ func ruleReaches(peerID string, groupIDs, resGroupIDs map[string]bool, resID str
 	return (peerSource && resDest) || (r.Bidirectional && peerDest && resSource)
 }
 
-func toPeerAccessOutput(peer netbird.Peer, policies []netbird.Policy, routes []netbird.Route, networks []netbird.Network, routers [][]netbird.NetworkRouter, resources [][]netbird.NetworkResource) peerAccessOutput {
+func toPeerAccessOutput(peer netbird.Peer, policies []netbird.Policy, routes []netbird.Route, networks []netbird.Network, routers [][]netbird.NetworkRouter, resources [][]netbird.NetworkResource, networksErr string) peerAccessOutput {
 	return peerAccessOutput{
 		Peer:     toAccessPeerOutput(peer),
 		Policies: matchPolicies(peer, policies), Routes: matchRoutes(peer, routes),
-		Networks: matchNetworks(peer, policies, networks, routers, resources),
+		Networks:      matchNetworks(peer, policies, networks, routers, resources),
+		NetworksError: networksErr,
 	}
 }
 

@@ -38,7 +38,7 @@ func TestToListNetworksOutput(t *testing.T) {
 
 	groupNames := map[string]string{"g1": "devs"}
 	peerNames := map[string]string{"peer1": "laptop"}
-	got := toListNetworksOutput(networks, routers, resources, groupNames, peerNames)
+	got := toListNetworksOutput(networks, routers, resources, refNames{groups: groupNames, peers: peerNames})
 	b, err := json.Marshal(got)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -58,7 +58,7 @@ func TestToListNetworksOutput(t *testing.T) {
 
 func TestToListNetworksOutputEmpty(t *testing.T) {
 	t.Parallel()
-	b, err := json.Marshal(toListNetworksOutput(nil, nil, nil, nil, nil))
+	b, err := json.Marshal(toListNetworksOutput(nil, nil, nil, refNames{}))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

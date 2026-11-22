@@ -64,9 +64,7 @@ func getPeerAccess(c peerAccessAPI) (*mcp.Tool, mcp.ToolHandlerFor[getPeerAccess
 		if err := g.Wait(); err != nil {
 			return nil, peerAccessOutput{}, err
 		}
-		out := toPeerAccessOutput(peer, policies, routes, networks, routers, resources)
-		out.NetworksError = networksErr
-		return nil, out, nil
+		return nil, toPeerAccessOutput(peer, policies, routes, networks, routers, resources, networksErr), nil
 	}
 	return tool, handler
 }

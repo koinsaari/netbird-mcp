@@ -58,21 +58,19 @@ func listRoutes(c listRoutesAPI) (*mcp.Tool, mcp.ToolHandlerFor[listRoutesInput,
 		if err != nil {
 			return nil, listRoutesOutput{}, err
 		}
-		out := toListRoutesOutput(routes, names.groups, names.peers)
-		out.NamesError = names.err
-		return nil, out, nil
+		return nil, toListRoutesOutput(routes, names), nil
 	}
 	return tool, handler
 }
 
-func toListRoutesOutput(routes []netbird.Route, groupNames, peerNames map[string]string) listRoutesOutput {
-	out := listRoutesOutput{Routes: make([]routeOutput, 0, len(routes))}
+func toListRoutesOutput(routes []netbird.Route, names refNames) listRoutesOutput {
+	out := listRoutesOutput{Routes: make([]routeOutput, 0, len(routes)), NamesError: names.err}
 	for _, r := range routes {
 		out.Routes = append(out.Routes, routeOutput{
 			ID: r.ID, NetworkID: r.NetworkID, Description: r.Description, Enabled: r.Enabled,
-			NetworkType: r.NetworkType, Network: r.Network, Domains: nonNil(r.Domains), Peer: toPeerRef(r.Peer, peerNames),
-			PeerGroups: toGroupRefs(r.PeerGroups, groupNames), Groups: toGroupRefs(r.Groups, groupNames),
-			AccessControlGroups: toGroupRefs(r.AccessControlGroups, groupNames), Metric: r.Metric,
+			NetworkType: r.NetworkType, Network: r.Network, Domains: nonNil(r.Domains), Peer: toPeerRef(r.Peer, names.peers),
+			PeerGroups: toGroupRefs(r.PeerGroups, names.groups), Groups: toGroupRefs(r.Groups, names.groups),
+			AccessControlGroups: toGroupRefs(r.AccessControlGroups, names.groups), Metric: r.Metric,
 			Masquerade: r.Masquerade, KeepRoute: r.KeepRoute, SkipAutoApply: r.SkipAutoApply,
 		})
 	}

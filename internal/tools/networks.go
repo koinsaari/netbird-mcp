@@ -79,9 +79,7 @@ func listNetworks(c listNetworksAPI) (*mcp.Tool, mcp.ToolHandlerFor[listNetworks
 		if err != nil {
 			return nil, listNetworksOutput{}, err
 		}
-		out := toListNetworksOutput(networks, routers, resources, names.groups, names.peers)
-		out.NamesError = names.err
-		return nil, out, nil
+		return nil, toListNetworksOutput(networks, routers, resources, names), nil
 	}
 	return tool, handler
 }
@@ -119,8 +117,8 @@ func fetchNetworks(ctx context.Context, c networkAPI) ([]netbird.Network, [][]ne
 	return networks, routers, resources, nil
 }
 
-func toListNetworksOutput(networks []netbird.Network, routers [][]netbird.NetworkRouter, resources [][]netbird.NetworkResource, groupNames, peerNames map[string]string) listNetworksOutput {
-	out := listNetworksOutput{Networks: make([]networkOutput, 0, len(networks))}
+func toListNetworksOutput(networks []netbird.Network, routers [][]netbird.NetworkRouter, resources [][]netbird.NetworkResource, names refNames) listNetworksOutput {
+	out := listNetworksOutput{Networks: make([]networkOutput, 0, len(networks)), NamesError: names.err}
 	for i, n := range networks {
 		no := networkOutput{
 			ID: n.ID, Name: n.Name, Description: n.Description, RoutingPeersCount: n.RoutingPeersCount,
@@ -130,7 +128,7 @@ func toListNetworksOutput(networks []netbird.Network, routers [][]netbird.Networ
 		}
 		for _, r := range routers[i] {
 			no.Routers = append(no.Routers, networkRouterOutput{
-				ID: r.ID, Peer: toPeerRef(r.Peer, peerNames), PeerGroups: toGroupRefs(r.PeerGroups, groupNames),
+				ID: r.ID, Peer: toPeerRef(r.Peer, names.peers), PeerGroups: toGroupRefs(r.PeerGroups, names.groups),
 				Metric: r.Metric, Masquerade: r.Masquerade, Enabled: r.Enabled,
 			})
 		}
