@@ -40,21 +40,21 @@ func TestToGroupRefs(t *testing.T) {
 		name  string
 		ids   []string
 		names map[string]string
-		want  []groupOutput
+		want  []refOutput
 	}{
-		{name: "nil ids", names: names, want: []groupOutput{}},
-		{name: "nil names", ids: []string{"g1"}, want: []groupOutput{{ID: "g1"}}},
+		{name: "nil ids", names: names, want: []refOutput{}},
+		{name: "nil names", ids: []string{"g1"}, want: []refOutput{{ID: "g1"}}},
 		{
 			name:  "keeps order",
 			ids:   []string{"g2", "g1"},
 			names: names,
-			want:  []groupOutput{{ID: "g2", Name: "ops"}, {ID: "g1", Name: "devs"}},
+			want:  []refOutput{{ID: "g2", Name: "ops"}, {ID: "g1", Name: "devs"}},
 		},
 		{
 			name:  "unknown id has empty name",
 			ids:   []string{"gone", "g1"},
 			names: names,
-			want:  []groupOutput{{ID: "gone"}, {ID: "g1", Name: "devs"}},
+			want:  []refOutput{{ID: "gone"}, {ID: "g1", Name: "devs"}},
 		},
 	}
 	for _, tt := range tests {
@@ -74,7 +74,7 @@ func TestToGroupOutputs(t *testing.T) {
 		t.Errorf("nil input = %#v, want empty non-nil", got)
 	}
 	got := toGroupOutputs([]netbird.Group{{ID: "g1", Name: "a", PeersCount: 3}})
-	if !reflect.DeepEqual(got, []groupOutput{{ID: "g1", Name: "a"}}) {
+	if !reflect.DeepEqual(got, []refOutput{{ID: "g1", Name: "a"}}) {
 		t.Errorf("got %+v", got)
 	}
 }
@@ -141,6 +141,38 @@ func TestPeerNamesByID(t *testing.T) {
 			got := peerNamesByID(tt.peers)
 			if got == nil || !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("peerNamesByID = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToPeerRef(t *testing.T) {
+	t.Parallel()
+	names := map[string]string{"p1": "laptop"}
+	tests := []struct {
+		name  string
+		id    string
+		names map[string]string
+		want  string
+	}{
+		{name: "empty id", id: "", names: names, want: "null"},
+		{name: "known", id: "p1", names: names, want: `{"id":"p1","name":"laptop"}`},
+		{name: "unknown has no name", id: "gone", names: names, want: `{"id":"gone"}`},
+		{name: "nil names", id: "p1", want: `{"id":"p1"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ref := toPeerRef(tt.id, tt.names)
+			if (tt.want == "null") != (ref == nil) {
+				t.Fatalf("toPeerRef = %#v, want %s", ref, tt.want)
+			}
+			b, err := json.Marshal(ref)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if string(b) != tt.want {
+				t.Errorf("got %s, want %s", b, tt.want)
 			}
 		})
 	}

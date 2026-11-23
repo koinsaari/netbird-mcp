@@ -411,18 +411,18 @@ func TestToAccessPeerOutput(t *testing.T) {
 			},
 			want: accessPeerOutput{
 				ID: "p1", Name: "laptop", IP: "100.64.0.1", DNSLabel: "laptop.netbird.cloud", Connected: true,
-				Groups: []groupOutput{{ID: "g1", Name: "devs"}, {ID: "g2", Name: "all"}},
+				Groups: []refOutput{{ID: "g1", Name: "devs"}, {ID: "g2", Name: "all"}},
 			},
 		},
 		{
 			name: "nil groups become empty list",
 			in:   netbird.Peer{ID: "p1"},
-			want: accessPeerOutput{ID: "p1", Groups: []groupOutput{}},
+			want: accessPeerOutput{ID: "p1", Groups: []refOutput{}},
 		},
 		{
 			name: "local flags present",
 			in:   netbird.Peer{ID: "p1", LocalFlags: &netbird.PeerLocalFlags{ServerSSHAllowed: &yes}},
-			want: accessPeerOutput{ID: "p1", Groups: []groupOutput{}, LocalFlags: &localFlagsOutput{ServerSSHAllowed: &yes}},
+			want: accessPeerOutput{ID: "p1", Groups: []refOutput{}, LocalFlags: &localFlagsOutput{ServerSSHAllowed: &yes}},
 		},
 	}
 	for _, tt := range tests {
@@ -458,7 +458,7 @@ func TestAccessPeerOutputJSON(t *testing.T) {
 
 func TestToPeerAccessOutput(t *testing.T) {
 	peer := testPeer()
-	got := toPeerAccessOutput(peer, nil, nil, nil, nil, nil)
+	got := toPeerAccessOutput(peer, nil, nil, nil, nil, nil, "")
 	if got.Peer.ID != "p1" || got.Peer.Name != "laptop" {
 		t.Errorf("peer not mapped: %+v", got.Peer)
 	}
@@ -468,7 +468,7 @@ func TestToPeerAccessOutput(t *testing.T) {
 
 	policies := []netbird.Policy{{ID: "a", Rules: []netbird.PolicyRule{{Sources: []netbird.Group{grp("g1", "devs")}}}}}
 	routes := []netbird.Route{{ID: "r", Peer: "p1"}}
-	got = toPeerAccessOutput(peer, policies, routes, nil, nil, nil)
+	got = toPeerAccessOutput(peer, policies, routes, nil, nil, nil, "")
 	if len(got.Policies) != 1 || got.Policies[0].ID != "a" || len(got.Routes) != 1 || got.Routes[0].ID != "r" {
 		t.Errorf("policies/routes not joined: %+v %+v", got.Policies, got.Routes)
 	}
@@ -479,7 +479,7 @@ func TestPeerAccessOutputJSON(t *testing.T) {
 		policies := []netbird.Policy{{ID: "a", Rules: []netbird.PolicyRule{{
 			Sources: []netbird.Group{grp("g1", "devs")}, DestinationResource: &netbird.Resource{ID: "d1", Type: "host"},
 		}}}}
-		b, err := json.Marshal(toPeerAccessOutput(testPeer(), policies, nil, nil, nil, nil))
+		b, err := json.Marshal(toPeerAccessOutput(testPeer(), policies, nil, nil, nil, nil, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -492,7 +492,7 @@ func TestPeerAccessOutputJSON(t *testing.T) {
 	})
 
 	t.Run("empty lists encode as [] not null", func(t *testing.T) {
-		b, err := json.Marshal(toPeerAccessOutput(netbird.Peer{ID: "p1"}, nil, nil, nil, nil, nil))
+		b, err := json.Marshal(toPeerAccessOutput(netbird.Peer{ID: "p1"}, nil, nil, nil, nil, nil, ""))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -510,7 +510,7 @@ func TestPeerAccessOutputJSON(t *testing.T) {
 	t.Run("optional keys omitted and other_side always present", func(t *testing.T) {
 		policies := []netbird.Policy{{ID: "a", Rules: []netbird.PolicyRule{{Sources: []netbird.Group{grp("g1", "devs")}}}}}
 		routes := []netbird.Route{{ID: "r", Peer: "p1"}}
-		b, err := json.Marshal(toPeerAccessOutput(testPeer(), policies, routes, nil, nil, nil))
+		b, err := json.Marshal(toPeerAccessOutput(testPeer(), policies, routes, nil, nil, nil, ""))
 		if err != nil {
 			t.Fatal(err)
 		}

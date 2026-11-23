@@ -18,10 +18,17 @@ type networkAPI interface {
 	ListNetworkResources(ctx context.Context, networkID string) ([]netbird.NetworkResource, error)
 }
 
+type listNetworksAPI interface {
+	networkAPI
+	groupAPI
+	peerAPI
+}
+
 type listNetworksInput struct{}
 
 type listNetworksOutput struct {
-	Networks []networkOutput `json:"networks"`
+	Networks   []networkOutput `json:"networks"`
+	NamesError string          `json:"names_error,omitempty"`
 }
 
 type networkOutput struct {
@@ -35,36 +42,44 @@ type networkOutput struct {
 }
 
 type networkRouterOutput struct {
-	ID         string   `json:"id"`
-	Peer       string   `json:"peer,omitempty"`
-	PeerGroups []string `json:"peer_groups"`
-	Metric     int      `json:"metric"`
-	Masquerade bool     `json:"masquerade"`
-	Enabled    bool     `json:"enabled"`
+	ID         string      `json:"id"`
+	Peer       *refOutput  `json:"peer,omitempty"`
+	PeerGroups []refOutput `json:"peer_groups"`
+	Metric     int         `json:"metric"`
+	Masquerade bool        `json:"masquerade"`
+	Enabled    bool        `json:"enabled"`
 }
 
 type networkResourceOutput struct {
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	Address     string        `json:"address"`
-	Type        string        `json:"type"`
-	Enabled     bool          `json:"enabled"`
-	Groups      []groupOutput `json:"groups"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
+	Address     string      `json:"address"`
+	Type        string      `json:"type"`
+	Enabled     bool        `json:"enabled"`
+	Groups      []refOutput `json:"groups"`
 }
 
-func listNetworks(c networkAPI) (*mcp.Tool, mcp.ToolHandlerFor[listNetworksInput, listNetworksOutput]) {
+func listNetworks(c listNetworksAPI) (*mcp.Tool, mcp.ToolHandlerFor[listNetworksInput, listNetworksOutput]) {
 	tool := &mcp.Tool{
 		Name:        "list_networks",
-		Description: "Lists all NetBird networks with their routers (routing peer or peer groups, metric, masquerade) and resources (address, type, groups). Disabled routers and resources are included with their enabled flag.",
+		Description: "Lists all NetBird networks with their routers (routing peer or peer groups, metric, masquerade) and resources (address, type, groups). Disabled routers and resources are included with their enabled flag. Group and peer references include names; names_error appears when names cannot be fetched.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}
 	handler := func(ctx context.Context, _ *mcp.CallToolRequest, _ listNetworksInput) (*mcp.CallToolResult, listNetworksOutput, error) {
-		networks, routers, resources, err := fetchNetworks(ctx, c)
+		var (
+			networks  []netbird.Network
+			routers   [][]netbird.NetworkRouter
+			resources [][]netbird.NetworkResource
+		)
+		names, err := resolveNames(ctx, c, c, func(ctx context.Context) (err error) {
+			networks, routers, resources, err = fetchNetworks(ctx, c)
+			return err
+		})
 		if err != nil {
 			return nil, listNetworksOutput{}, err
 		}
-		return nil, toListNetworksOutput(networks, routers, resources), nil
+		return nil, toListNetworksOutput(networks, routers, resources, names), nil
 	}
 	return tool, handler
 }
@@ -102,8 +117,8 @@ func fetchNetworks(ctx context.Context, c networkAPI) ([]netbird.Network, [][]ne
 	return networks, routers, resources, nil
 }
 
-func toListNetworksOutput(networks []netbird.Network, routers [][]netbird.NetworkRouter, resources [][]netbird.NetworkResource) listNetworksOutput {
-	out := listNetworksOutput{Networks: make([]networkOutput, 0, len(networks))}
+func toListNetworksOutput(networks []netbird.Network, routers [][]netbird.NetworkRouter, resources [][]netbird.NetworkResource, names refNames) listNetworksOutput {
+	out := listNetworksOutput{Networks: make([]networkOutput, 0, len(networks)), NamesError: names.err}
 	for i, n := range networks {
 		no := networkOutput{
 			ID: n.ID, Name: n.Name, Description: n.Description, RoutingPeersCount: n.RoutingPeersCount,
@@ -113,7 +128,7 @@ func toListNetworksOutput(networks []netbird.Network, routers [][]netbird.Networ
 		}
 		for _, r := range routers[i] {
 			no.Routers = append(no.Routers, networkRouterOutput{
-				ID: r.ID, Peer: r.Peer, PeerGroups: nonNil(r.PeerGroups),
+				ID: r.ID, Peer: toPeerRef(r.Peer, names.peers), PeerGroups: toGroupRefs(r.PeerGroups, names.groups),
 				Metric: r.Metric, Masquerade: r.Masquerade, Enabled: r.Enabled,
 			})
 		}

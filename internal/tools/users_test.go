@@ -24,6 +24,8 @@ func (f *fakeUserAPI) ListUsers(_ context.Context, p netbird.ListUsersParams) ([
 }
 
 func TestToListUsersOutput(t *testing.T) {
+	t.Parallel()
+	groupNames := map[string]string{"g1": "devs", "g2": "ops"}
 	tests := []struct {
 		name string
 		in   []netbird.User
@@ -46,14 +48,19 @@ func TestToListUsersOutput(t *testing.T) {
 				},
 				{ID: "u1", AutoGroups: []string{}},
 			},
-			want: `{"users":[{"id":"u2","email":"b@x.io","name":"B","role":"user","status":"invited","last_login":"2026-01-02T03:04:05Z","auto_groups":["g2","g1"],"is_service_user":true,"is_blocked":true,"pending_approval":true,"is_current":true},` +
+			want: `{"users":[{"id":"u2","email":"b@x.io","name":"B","role":"user","status":"invited","last_login":"2026-01-02T03:04:05Z","auto_groups":[{"id":"g2","name":"ops"},{"id":"g1","name":"devs"}],"is_service_user":true,"is_blocked":true,"pending_approval":true,"is_current":true},` +
 				`{"id":"u1","email":"","name":"","role":"","status":"","auto_groups":[],"is_service_user":false,"is_blocked":false,"pending_approval":false}]}`,
+		},
+		{
+			name: "unknown group id has no name",
+			in:   []netbird.User{{ID: "u1", AutoGroups: []string{"gone", "g1"}}},
+			want: `{"users":[{"id":"u1","email":"","name":"","role":"","status":"","auto_groups":[{"id":"gone"},{"id":"g1","name":"devs"}],"is_service_user":false,"is_blocked":false,"pending_approval":false}]}`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := json.Marshal(toListUsersOutput(tt.in))
+			got, err := json.Marshal(toListUsersOutput(tt.in, refNames{groups: groupNames}))
 			if err != nil {
 				t.Fatalf("marshal: %v", err)
 			}
@@ -96,7 +103,7 @@ func TestListUsersTool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			cs, logs := connectFake(t, fakeClient{userAPI: tt.api})
+			cs, logs := connectFake(t, fakeClient{userAPI: tt.api, groupAPI: &fakeGroupAPI{}})
 			res, text := callTool(t, cs, "list_users", tt.args)
 
 			if tt.api.calls != 1 {
@@ -152,11 +159,11 @@ func TestListUsersTool(t *testing.T) {
 
 func TestListUsersToolSchema(t *testing.T) {
 	t.Parallel()
-	tool, _ := listUsers(&fakeUserAPI{})
+	tool, _ := listUsers(fakeClient{userAPI: &fakeUserAPI{}})
 	if tool.Name != "list_users" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	const wantDesc = "Lists users in the NetBird account with role, status and auto-assigned groups. Set service_user to true to list only service users, or false for only regular users."
+	const wantDesc = "Lists users in the NetBird account with role, status and auto-assigned groups. Set service_user to true to list only service users, or false for only regular users. Group references include names; names_error appears when names cannot be fetched."
 	if tool.Description != wantDesc {
 		t.Errorf("description = %q", tool.Description)
 	}
@@ -167,5 +174,61 @@ func TestListUsersToolSchema(t *testing.T) {
 	a := tool.Annotations
 	if a == nil || !a.ReadOnlyHint || !a.IdempotentHint || a.DestructiveHint != nil || a.OpenWorldHint != nil {
 		t.Errorf("annotations = %+v", a)
+	}
+}
+
+func TestListUsersToolResolvesNames(t *testing.T) {
+	t.Parallel()
+	api := &fakeUserAPI{users: []netbird.User{{ID: "u1", AutoGroups: []string{"g1", "gone"}}}}
+	grp := &fakeGroupAPI{groups: []netbird.Group{{ID: "g1", Name: "devs"}}}
+	cs, logs := connectFake(t, fakeClient{userAPI: api, groupAPI: grp})
+	res, text := callTool(t, cs, "list_users", nil)
+	if res.IsError {
+		t.Fatalf("unexpected tool error: %s", text)
+	}
+	raw := structuredJSON(t, res)
+	assertJSONEqual(t, raw, `{"users":[{"id":"u1","email":"","name":"","role":"","status":"",`+
+		`"auto_groups":[{"id":"g1","name":"devs"},{"id":"gone"}],"is_service_user":false,"is_blocked":false,"pending_approval":false}]}`)
+	if api.calls != 1 || grp.calls != 1 {
+		t.Errorf("calls = %d/%d, want 1/1", api.calls, grp.calls)
+	}
+	if grp.params != (netbird.ListGroupsParams{}) {
+		t.Errorf("group params = %+v, want empty", grp.params)
+	}
+	if strings.Contains(text, sentinelToken) || strings.Contains(raw, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
+		t.Errorf("sentinel leaked: text=%q logs=%s", text, logs)
+	}
+}
+
+func TestListUsersToolGroupsFailureDegrades(t *testing.T) {
+	t.Parallel()
+	api := &fakeUserAPI{users: []netbird.User{{ID: "u1", AutoGroups: []string{"g1"}}}}
+	grp := &fakeGroupAPI{err: &netbird.APIError{Status: 500, Message: "boom"}}
+	cs, logs := connectFake(t, fakeClient{userAPI: api, groupAPI: grp})
+	res, text := callTool(t, cs, "list_users", nil)
+	if res.IsError {
+		t.Fatalf("lookup failure must not fail the tool: %s", text)
+	}
+	raw := structuredJSON(t, res)
+	assertJSONEqual(t, raw, `{"users":[{"id":"u1","email":"","name":"","role":"","status":"",`+
+		`"auto_groups":[{"id":"g1"}],"is_service_user":false,"is_blocked":false,"pending_approval":false}],`+
+		`"names_error":"netbird api: 500: boom (hint: NetBird server error, retry later)"}`)
+	if strings.Contains(text, sentinelToken) || strings.Contains(raw, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
+		t.Errorf("sentinel leaked: text=%q logs=%s", text, logs)
+	}
+}
+
+func TestListUsersToolCoreFailureFails(t *testing.T) {
+	t.Parallel()
+	api := &fakeUserAPI{err: &netbird.APIError{Status: 401, Message: "bad token"}}
+	grp := &fakeGroupAPI{groups: []netbird.Group{{ID: "g1", Name: "devs"}}}
+	cs, logs := connectFake(t, fakeClient{userAPI: api, groupAPI: grp})
+	res, text := callTool(t, cs, "list_users", nil)
+	const want = "netbird api: 401: bad token (hint: token invalid or expired)"
+	if !res.IsError || text != want {
+		t.Errorf("IsError=%v text=%q, want error %q", res.IsError, text, want)
+	}
+	if strings.Contains(text, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
+		t.Errorf("sentinel leaked: text=%q logs=%s", text, logs)
 	}
 }

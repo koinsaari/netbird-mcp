@@ -20,12 +20,12 @@ func TestToPeerOutput(t *testing.T) {
 		in   netbird.Peer
 		want peerOutput
 	}{
-		{"nil groups", netbird.Peer{ID: "p"}, peerOutput{ID: "p", Groups: []groupOutput{}}},
+		{"nil groups", netbird.Peer{ID: "p"}, peerOutput{ID: "p", Groups: []refOutput{}}},
 		{"full", full, peerOutput{
 			ID: "p1", Name: "n", Hostname: "h", DNSLabel: "d", IP: "100.64.0.1", Connected: true,
 			LastSeen: "2026-01-01T00:00:00Z", OS: "linux", Version: "0.1", UserID: "u",
 			LoginExpired: true, ApprovalRequired: true,
-			Groups: []groupOutput{{ID: "g1", Name: "a"}, {ID: "g2", Name: "b"}},
+			Groups: []refOutput{{ID: "g1", Name: "a"}, {ID: "g2", Name: "b"}},
 		}},
 	}
 	for _, tt := range tests {
