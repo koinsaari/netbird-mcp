@@ -31,6 +31,14 @@ func toGroupRefs(ids []string, names map[string]string) []groupOutput {
 	return out
 }
 
+func peerNamesByID(peers []netbird.Peer) map[string]string {
+	names := make(map[string]string, len(peers))
+	for _, p := range peers {
+		names[p.ID] = p.Name
+	}
+	return names
+}
+
 type localFlagsOutput struct {
 	RosenpassEnabled      *bool `json:"rosenpass_enabled,omitempty"`
 	RosenpassPermissive   *bool `json:"rosenpass_permissive,omitempty"`

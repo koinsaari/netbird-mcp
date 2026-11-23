@@ -27,7 +27,7 @@ type listDNSOutput struct {
 	Zones                    []dnsZoneOutput         `json:"zones"`
 	DisabledManagementGroups []groupOutput           `json:"disabled_management_groups"`
 	ZonesError               string                  `json:"zones_error,omitempty"`
-	GroupNamesError          string                  `json:"group_names_error,omitempty"`
+	NamesError               string                  `json:"names_error,omitempty"`
 }
 
 type nameserverGroupOutput struct {
@@ -69,7 +69,7 @@ type dnsRecordOutput struct {
 func listDNS(c listDNSAPI) (*mcp.Tool, mcp.ToolHandlerFor[listDNSInput, listDNSOutput]) {
 	tool := &mcp.Tool{
 		Name:        "list_dns",
-		Description: "Lists the NetBird DNS setup: nameserver groups (nameservers, match domains or primary, the peer groups using them), custom DNS zones with their A, AAAA and CNAME records and distribution groups, and the groups whose DNS management is disabled. If zones or group names cannot be fetched, zones is empty or names are missing, and zones_error or group_names_error explains why.",
+		Description: "Lists the NetBird DNS setup: nameserver groups (nameservers, match domains or primary, the peer groups using them), custom DNS zones with their A, AAAA and CNAME records and distribution groups, and the groups whose DNS management is disabled. If zones or group names cannot be fetched, zones is empty or names are missing, and zones_error or names_error explains why.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}
 	handler := func(ctx context.Context, _ *mcp.CallToolRequest, _ listDNSInput) (*mcp.CallToolResult, listDNSOutput, error) {
@@ -77,54 +77,45 @@ func listDNS(c listDNSAPI) (*mcp.Tool, mcp.ToolHandlerFor[listDNSInput, listDNSO
 			nsGroups []netbird.NameserverGroup
 			settings netbird.DNSSettings
 			zones    []netbird.DNSZone
-			groups   []netbird.Group
-
-			zonesErr, groupNamesErr string
+			zonesErr string
 		)
-		g, gctx := errgroup.WithContext(ctx)
-		g.Go(func() (err error) {
-			nsGroups, err = c.ListNameserverGroups(gctx)
-			return err
-		})
-		g.Go(func() (err error) {
-			settings, err = c.GetDNSSettings(gctx)
-			return err
-		})
-		g.Go(func() error {
-			var zerr error
-			zones, zerr = c.ListDNSZones(gctx)
-			if zerr != nil {
-				zones = nil
-				zonesErr = toolMessage(zerr)
-			}
-			return nil
-		})
-		g.Go(func() error {
-			var gerr error
-			groups, gerr = c.ListGroups(gctx, netbird.ListGroupsParams{})
-			if gerr != nil {
-				groups = nil
-				groupNamesErr = toolMessage(gerr)
-			}
-			return nil
-		})
-		if err := g.Wait(); err != nil {
+		core := func(ctx context.Context) error {
+			g, gctx := errgroup.WithContext(ctx)
+			g.Go(func() (err error) {
+				nsGroups, err = c.ListNameserverGroups(gctx)
+				return err
+			})
+			g.Go(func() (err error) {
+				settings, err = c.GetDNSSettings(gctx)
+				return err
+			})
+			g.Go(func() error {
+				var zerr error
+				zones, zerr = c.ListDNSZones(gctx)
+				if zerr != nil {
+					zones = nil
+					zonesErr = toolMessage(zerr)
+				}
+				return nil
+			})
+			return g.Wait()
+		}
+		names, err := resolveNames(ctx, c, nil, core)
+		if err != nil {
 			return nil, listDNSOutput{}, err
 		}
-		out := toListDNSOutput(nsGroups, settings, zones, groups)
-		out.ZonesError = zonesErr
-		out.GroupNamesError = groupNamesErr
-		return nil, out, nil
+		return nil, toListDNSOutput(nsGroups, settings, zones, zonesErr, names), nil
 	}
 	return tool, handler
 }
 
-func toListDNSOutput(nsGroups []netbird.NameserverGroup, settings netbird.DNSSettings, zones []netbird.DNSZone, groups []netbird.Group) listDNSOutput {
-	names := groupNamesByID(groups)
+func toListDNSOutput(nsGroups []netbird.NameserverGroup, settings netbird.DNSSettings, zones []netbird.DNSZone, zonesErr string, names refNames) listDNSOutput {
 	out := listDNSOutput{
 		NameserverGroups:         make([]nameserverGroupOutput, 0, len(nsGroups)),
 		Zones:                    make([]dnsZoneOutput, 0, len(zones)),
-		DisabledManagementGroups: toGroupRefs(settings.DisabledManagementGroups, names),
+		DisabledManagementGroups: toGroupRefs(settings.DisabledManagementGroups, names.groups),
+		ZonesError:               zonesErr,
+		NamesError:               names.err,
 	}
 	for _, ns := range nsGroups {
 		servers := make([]nameserverOutput, 0, len(ns.Nameservers))
@@ -134,7 +125,7 @@ func toListDNSOutput(nsGroups []netbird.NameserverGroup, settings netbird.DNSSet
 		out.NameserverGroups = append(out.NameserverGroups, nameserverGroupOutput{
 			ID: ns.ID, Name: ns.Name, Description: ns.Description, Enabled: ns.Enabled, Primary: ns.Primary,
 			Domains: nonNil(ns.Domains), SearchDomainsEnabled: ns.SearchDomainsEnabled,
-			Groups: toGroupRefs(ns.Groups, names), Nameservers: servers,
+			Groups: toGroupRefs(ns.Groups, names.groups), Nameservers: servers,
 		})
 	}
 	for _, z := range zones {
@@ -144,7 +135,7 @@ func toListDNSOutput(nsGroups []netbird.NameserverGroup, settings netbird.DNSSet
 		}
 		out.Zones = append(out.Zones, dnsZoneOutput{
 			ID: z.ID, Name: z.Name, Domain: z.Domain, Enabled: z.Enabled, EnableSearchDomain: z.EnableSearchDomain,
-			DistributionGroups: toGroupRefs(z.DistributionGroups, names), Records: records,
+			DistributionGroups: toGroupRefs(z.DistributionGroups, names.groups), Records: records,
 		})
 	}
 	return out

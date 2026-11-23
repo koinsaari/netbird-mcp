@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -38,7 +37,7 @@ func (f *fakeDNSAPI) ListDNSZones(context.Context) ([]netbird.DNSZone, error) {
 
 func marshalDNSOutput(t *testing.T, ns []netbird.NameserverGroup, s netbird.DNSSettings, z []netbird.DNSZone, g []netbird.Group) string {
 	t.Helper()
-	b, err := json.Marshal(toListDNSOutput(ns, s, z, g))
+	b, err := json.Marshal(toListDNSOutput(ns, s, z, "", refNames{groups: groupNamesByID(g)}))
 	if err != nil {
 		t.Fatalf("marshal output: %v", err)
 	}
@@ -159,32 +158,20 @@ func TestListDNSTool(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("unexpected tool error: %s", text)
 	}
-	raw, err := json.Marshal(res.StructuredContent)
-	if err != nil {
-		t.Fatalf("marshal result: %v", err)
-	}
+	raw := structuredJSON(t, res)
 	const want = `{"nameserver_groups":[{"id":"n1","name":"cf","enabled":true,"primary":false,"domains":[],"search_domains_enabled":false,` +
 		`"groups":[{"id":"g1","name":"devs"}],"nameservers":[{"ip":"1.1.1.1","ns_type":"udp","port":53}]}],` +
 		`"zones":[{"id":"z1","name":"internal","domain":"corp.example","enabled":false,"enable_search_domain":false,` +
 		`"distribution_groups":[{"id":"g1","name":"devs"}],"records":[{"id":"r1","name":"a.corp.example","type":"A","content":"10.0.0.1","ttl":300}]}],` +
 		`"disabled_management_groups":[{"id":"g2","name":"ops"}]}`
-	var gotV, wantV any
-	if err := json.Unmarshal(raw, &gotV); err != nil {
-		t.Fatalf("unmarshal got: %v", err)
-	}
-	if err := json.Unmarshal([]byte(want), &wantV); err != nil {
-		t.Fatalf("unmarshal want: %v", err)
-	}
-	if !reflect.DeepEqual(gotV, wantV) {
-		t.Errorf("structured =\n%s\nwant\n%s", raw, want)
-	}
+	assertJSONEqual(t, raw, want)
 	if dns.calls.Load() != 3 || grp.calls != 1 {
 		t.Errorf("calls = %d/%d, want 3/1", dns.calls.Load(), grp.calls)
 	}
 	if !strings.Contains(logs.String(), "tool=list_dns") || !strings.Contains(logs.String(), "is_error=false") {
 		t.Errorf("logs missing tool fields: %s", logs)
 	}
-	if strings.Contains(text, sentinelToken) || strings.Contains(string(raw), sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
+	if strings.Contains(text, sentinelToken) || strings.Contains(raw, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
 		t.Errorf("sentinel leaked: text=%q logs=%s", text, logs)
 	}
 }
@@ -232,7 +219,7 @@ func TestListDNSToolDegrades(t *testing.T) {
 				`"zones":[{"id":"z1","name":"internal","domain":"corp.example","enabled":false,"enable_search_domain":false,` +
 				`"distribution_groups":[{"id":"g1"}],"records":[]}],` +
 				`"disabled_management_groups":[{"id":"g2"}],` +
-				`"group_names_error":"netbird api: 500: boom (hint: NetBird server error, retry later)"}`,
+				`"names_error":"netbird api: 500: boom (hint: NetBird server error, retry later)"}`,
 		},
 		{
 			name: "zones failure gives empty zones",
@@ -252,28 +239,16 @@ func TestListDNSToolDegrades(t *testing.T) {
 			if res.IsError {
 				t.Fatalf("unexpected tool error: %s", text)
 			}
-			raw, err := json.Marshal(res.StructuredContent)
-			if err != nil {
-				t.Fatalf("marshal result: %v", err)
-			}
+			raw := structuredJSON(t, res)
 			want := tt.want
 			if tt.dns.zonesErr != nil {
 				want = strings.Replace(want, "ZONES_ERR", toolMessage(tt.dns.zonesErr), 1)
 			}
-			var gotV, wantV any
-			if err := json.Unmarshal(raw, &gotV); err != nil {
-				t.Fatalf("unmarshal got: %v", err)
-			}
-			if err := json.Unmarshal([]byte(want), &wantV); err != nil {
-				t.Fatalf("unmarshal want: %v", err)
-			}
-			if !reflect.DeepEqual(gotV, wantV) {
-				t.Errorf("structured =\n%s\nwant\n%s", raw, want)
-			}
+			assertJSONEqual(t, raw, want)
 			if !strings.Contains(logs.String(), "is_error=false") {
 				t.Errorf("logs missing is_error=false: %s", logs)
 			}
-			if strings.Contains(text, sentinelToken) || strings.Contains(string(raw), sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
+			if strings.Contains(text, sentinelToken) || strings.Contains(raw, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
 				t.Errorf("sentinel leaked: text=%q result=%s logs=%s", text, raw, logs)
 			}
 		})
@@ -326,7 +301,7 @@ func TestListDNSToolDefinition(t *testing.T) {
 	if tool.Name != "list_dns" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	const wantDesc = "Lists the NetBird DNS setup: nameserver groups (nameservers, match domains or primary, the peer groups using them), custom DNS zones with their A, AAAA and CNAME records and distribution groups, and the groups whose DNS management is disabled. If zones or group names cannot be fetched, zones is empty or names are missing, and zones_error or group_names_error explains why."
+	const wantDesc = "Lists the NetBird DNS setup: nameserver groups (nameservers, match domains or primary, the peer groups using them), custom DNS zones with their A, AAAA and CNAME records and distribution groups, and the groups whose DNS management is disabled. If zones or group names cannot be fetched, zones is empty or names are missing, and zones_error or names_error explains why."
 	if tool.Description != wantDesc {
 		t.Errorf("description = %q", tool.Description)
 	}

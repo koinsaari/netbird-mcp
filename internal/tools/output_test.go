@@ -120,3 +120,28 @@ func TestNonNil(t *testing.T) {
 		t.Errorf("non-empty = %#v, want %#v", got, in)
 	}
 }
+
+func TestPeerNamesByID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		peers []netbird.Peer
+		want  map[string]string
+	}{
+		{name: "nil", want: map[string]string{}},
+		{
+			name:  "maps ids to names",
+			peers: []netbird.Peer{{ID: "p1", Name: "laptop"}, {ID: "p2", Name: "server"}},
+			want:  map[string]string{"p1": "laptop", "p2": "server"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := peerNamesByID(tt.peers)
+			if got == nil || !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("peerNamesByID = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
