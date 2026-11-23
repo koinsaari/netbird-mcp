@@ -1,6 +1,7 @@
 package netbird
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"reflect"
@@ -12,35 +13,47 @@ func TestNetworkRequests(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name     string
-		call     func(c *Client, id string) error
+		call     func(ctx context.Context, c *Client, id string) error
 		id       string
 		wantPath string
 		wantRaw  string
 	}{
 		{
 			name:     "networks",
-			call:     func(c *Client, _ string) error { _, err := c.ListNetworks(t.Context()); return err },
+			call:     func(ctx context.Context, c *Client, _ string) error { _, err := c.ListNetworks(ctx); return err },
 			wantPath: "/api/networks", wantRaw: "",
 		},
 		{
 			name: "routers",
-			call: func(c *Client, id string) error { _, err := c.ListNetworkRouters(t.Context(), id); return err },
-			id:   "n1", wantPath: "/api/networks/n1/routers", wantRaw: "",
+			call: func(ctx context.Context, c *Client, id string) error {
+				_, err := c.ListNetworkRouters(ctx, id)
+				return err
+			},
+			id: "n1", wantPath: "/api/networks/n1/routers", wantRaw: "",
 		},
 		{
 			name: "resources",
-			call: func(c *Client, id string) error { _, err := c.ListNetworkResources(t.Context(), id); return err },
-			id:   "n1", wantPath: "/api/networks/n1/resources", wantRaw: "",
+			call: func(ctx context.Context, c *Client, id string) error {
+				_, err := c.ListNetworkResources(ctx, id)
+				return err
+			},
+			id: "n1", wantPath: "/api/networks/n1/resources", wantRaw: "",
 		},
 		{
 			name: "routers id escaped",
-			call: func(c *Client, id string) error { _, err := c.ListNetworkRouters(t.Context(), id); return err },
-			id:   "a/b?x=1", wantPath: "/api/networks/a/b?x=1/routers", wantRaw: "/api/networks/a%2Fb%3Fx=1/routers",
+			call: func(ctx context.Context, c *Client, id string) error {
+				_, err := c.ListNetworkRouters(ctx, id)
+				return err
+			},
+			id: "a/b?x=1", wantPath: "/api/networks/a/b?x=1/routers", wantRaw: "/api/networks/a%2Fb%3Fx=1/routers",
 		},
 		{
 			name: "resources id escaped",
-			call: func(c *Client, id string) error { _, err := c.ListNetworkResources(t.Context(), id); return err },
-			id:   "../x", wantPath: "/api/networks/../x/resources", wantRaw: "/api/networks/..%2Fx/resources",
+			call: func(ctx context.Context, c *Client, id string) error {
+				_, err := c.ListNetworkResources(ctx, id)
+				return err
+			},
+			id: "../x", wantPath: "/api/networks/../x/resources", wantRaw: "/api/networks/..%2Fx/resources",
 		},
 	}
 	for _, tt := range tests {
@@ -51,7 +64,7 @@ func TestNetworkRequests(t *testing.T) {
 				got = r
 				_, _ = w.Write([]byte("[]"))
 			})
-			if err := tt.call(c, tt.id); err != nil {
+			if err := tt.call(t.Context(), c, tt.id); err != nil {
 				t.Fatalf("call: %v", err)
 			}
 			if got.Method != http.MethodGet {
@@ -201,11 +214,11 @@ func TestNetworkAPIError(t *testing.T) {
 	calls := []struct {
 		name   string
 		prefix string
-		call   func(c *Client) error
+		call   func(ctx context.Context, c *Client) error
 	}{
-		{"networks", "list networks: ", func(c *Client) error { _, err := c.ListNetworks(t.Context()); return err }},
-		{"routers", "list network routers: ", func(c *Client) error { _, err := c.ListNetworkRouters(t.Context(), "n1"); return err }},
-		{"resources", "list network resources: ", func(c *Client) error { _, err := c.ListNetworkResources(t.Context(), "n1"); return err }},
+		{"networks", "list networks: ", func(ctx context.Context, c *Client) error { _, err := c.ListNetworks(ctx); return err }},
+		{"routers", "list network routers: ", func(ctx context.Context, c *Client) error { _, err := c.ListNetworkRouters(ctx, "n1"); return err }},
+		{"resources", "list network resources: ", func(ctx context.Context, c *Client) error { _, err := c.ListNetworkResources(ctx, "n1"); return err }},
 	}
 	errs := []struct {
 		name        string
@@ -225,7 +238,7 @@ func TestNetworkAPIError(t *testing.T) {
 					w.WriteHeader(e.status)
 					_, _ = w.Write([]byte(e.body))
 				})
-				err := cl.call(c)
+				err := cl.call(t.Context(), c)
 				var apiErr *APIError
 				if !errors.As(err, &apiErr) {
 					t.Fatalf("err = %v, want *APIError", err)
