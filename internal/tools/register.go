@@ -17,6 +17,7 @@ type Client interface {
 	routeAPI
 	networkAPI
 	postureCheckAPI
+	dnsAPI
 }
 
 func Register(s *mcp.Server, c Client, logger *slog.Logger) {
@@ -40,6 +41,8 @@ func Register(s *mcp.Server, c Client, logger *slog.Logger) {
 	mcp.AddTool(s, networksTool, logged(logger, networksTool.Name, networksH))
 	postureTool, postureH := listPostureChecks(c)
 	mcp.AddTool(s, postureTool, logged(logger, postureTool.Name, postureH))
+	dnsTool, dnsH := listDNS(c)
+	mcp.AddTool(s, dnsTool, logged(logger, dnsTool.Name, dnsH))
 }
 
 func logged[In, Out any](logger *slog.Logger, name string, h mcp.ToolHandlerFor[In, Out]) mcp.ToolHandlerFor[In, Out] {

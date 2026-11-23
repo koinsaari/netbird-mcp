@@ -3,7 +3,9 @@ package tools
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -51,6 +53,7 @@ type fakeClient struct {
 	routeAPI
 	networkAPI
 	postureCheckAPI
+	dnsAPI
 }
 
 func connectClient(t *testing.T, p peerAPI, g groupAPI) (*mcp.ClientSession, *bytes.Buffer) {
@@ -289,5 +292,28 @@ func TestGetPeerToolLeaksNoToken(t *testing.T) {
 	res, text := callTool(t, cs, "get_peer", map[string]any{"peer_id": "cdl0ajd5jtbs73abcdef"})
 	if !res.IsError || strings.Contains(text, sentinelToken) || strings.Contains(logs.String(), sentinelToken) {
 		t.Errorf("IsError=%v text=%q logs=%s", res.IsError, text, logs)
+	}
+}
+
+func structuredJSON(t *testing.T, res *mcp.CallToolResult) string {
+	t.Helper()
+	b, err := json.Marshal(res.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal structured content: %v", err)
+	}
+	return string(b)
+}
+
+func assertJSONEqual(t *testing.T, got, want string) {
+	t.Helper()
+	var gotV, wantV any
+	if err := json.Unmarshal([]byte(got), &gotV); err != nil {
+		t.Fatalf("unmarshal got: %v", err)
+	}
+	if err := json.Unmarshal([]byte(want), &wantV); err != nil {
+		t.Fatalf("unmarshal want: %v", err)
+	}
+	if !reflect.DeepEqual(gotV, wantV) {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
 }
