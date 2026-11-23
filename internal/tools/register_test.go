@@ -50,6 +50,7 @@ type fakeClient struct {
 	userAPI
 	routeAPI
 	networkAPI
+	postureCheckAPI
 }
 
 func connectClient(t *testing.T, p peerAPI, g groupAPI) (*mcp.ClientSession, *bytes.Buffer) {
