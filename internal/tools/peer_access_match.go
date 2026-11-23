@@ -41,7 +41,7 @@ type accessPeerOutput struct {
 	IP         string            `json:"ip"`
 	DNSLabel   string            `json:"dns_label"`
 	Connected  bool              `json:"connected"`
-	Groups     []groupOutput     `json:"groups"`
+	Groups     []refOutput       `json:"groups"`
 	LocalFlags *localFlagsOutput `json:"local_flags,omitempty"`
 }
 

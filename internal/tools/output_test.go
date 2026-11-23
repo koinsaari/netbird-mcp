@@ -40,21 +40,21 @@ func TestToGroupRefs(t *testing.T) {
 		name  string
 		ids   []string
 		names map[string]string
-		want  []groupOutput
+		want  []refOutput
 	}{
-		{name: "nil ids", names: names, want: []groupOutput{}},
-		{name: "nil names", ids: []string{"g1"}, want: []groupOutput{{ID: "g1"}}},
+		{name: "nil ids", names: names, want: []refOutput{}},
+		{name: "nil names", ids: []string{"g1"}, want: []refOutput{{ID: "g1"}}},
 		{
 			name:  "keeps order",
 			ids:   []string{"g2", "g1"},
 			names: names,
-			want:  []groupOutput{{ID: "g2", Name: "ops"}, {ID: "g1", Name: "devs"}},
+			want:  []refOutput{{ID: "g2", Name: "ops"}, {ID: "g1", Name: "devs"}},
 		},
 		{
 			name:  "unknown id has empty name",
 			ids:   []string{"gone", "g1"},
 			names: names,
-			want:  []groupOutput{{ID: "gone"}, {ID: "g1", Name: "devs"}},
+			want:  []refOutput{{ID: "gone"}, {ID: "g1", Name: "devs"}},
 		},
 	}
 	for _, tt := range tests {
@@ -74,7 +74,7 @@ func TestToGroupOutputs(t *testing.T) {
 		t.Errorf("nil input = %#v, want empty non-nil", got)
 	}
 	got := toGroupOutputs([]netbird.Group{{ID: "g1", Name: "a", PeersCount: 3}})
-	if !reflect.DeepEqual(got, []groupOutput{{ID: "g1", Name: "a"}}) {
+	if !reflect.DeepEqual(got, []refOutput{{ID: "g1", Name: "a"}}) {
 		t.Errorf("got %+v", got)
 	}
 }

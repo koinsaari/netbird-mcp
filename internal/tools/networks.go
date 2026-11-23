@@ -42,22 +42,22 @@ type networkOutput struct {
 }
 
 type networkRouterOutput struct {
-	ID         string         `json:"id"`
-	Peer       *peerRefOutput `json:"peer,omitempty"`
-	PeerGroups []groupOutput  `json:"peer_groups"`
-	Metric     int            `json:"metric"`
-	Masquerade bool           `json:"masquerade"`
-	Enabled    bool           `json:"enabled"`
+	ID         string      `json:"id"`
+	Peer       *refOutput  `json:"peer,omitempty"`
+	PeerGroups []refOutput `json:"peer_groups"`
+	Metric     int         `json:"metric"`
+	Masquerade bool        `json:"masquerade"`
+	Enabled    bool        `json:"enabled"`
 }
 
 type networkResourceOutput struct {
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	Address     string        `json:"address"`
-	Type        string        `json:"type"`
-	Enabled     bool          `json:"enabled"`
-	Groups      []groupOutput `json:"groups"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
+	Address     string      `json:"address"`
+	Type        string      `json:"type"`
+	Enabled     bool        `json:"enabled"`
+	Groups      []refOutput `json:"groups"`
 }
 
 func listNetworks(c listNetworksAPI) (*mcp.Tool, mcp.ToolHandlerFor[listNetworksInput, listNetworksOutput]) {

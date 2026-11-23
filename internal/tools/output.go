@@ -2,15 +2,15 @@ package tools
 
 import "github.com/koinsaari/netbird-mcp/internal/netbird"
 
-type groupOutput struct {
+type refOutput struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
 }
 
-func toGroupOutputs(groups []netbird.Group) []groupOutput {
-	out := make([]groupOutput, 0, len(groups))
+func toGroupOutputs(groups []netbird.Group) []refOutput {
+	out := make([]refOutput, 0, len(groups))
 	for _, g := range groups {
-		out = append(out, groupOutput{ID: g.ID, Name: g.Name})
+		out = append(out, refOutput{ID: g.ID, Name: g.Name})
 	}
 	return out
 }
@@ -23,17 +23,12 @@ func groupNamesByID(groups []netbird.Group) map[string]string {
 	return names
 }
 
-func toGroupRefs(ids []string, names map[string]string) []groupOutput {
-	out := make([]groupOutput, 0, len(ids))
+func toGroupRefs(ids []string, names map[string]string) []refOutput {
+	out := make([]refOutput, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, groupOutput{ID: id, Name: names[id]})
+		out = append(out, refOutput{ID: id, Name: names[id]})
 	}
 	return out
-}
-
-type peerRefOutput struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
 }
 
 func peerNamesByID(peers []netbird.Peer) map[string]string {
@@ -44,11 +39,11 @@ func peerNamesByID(peers []netbird.Peer) map[string]string {
 	return names
 }
 
-func toPeerRef(id string, names map[string]string) *peerRefOutput {
+func toPeerRef(id string, names map[string]string) *refOutput {
 	if id == "" {
 		return nil
 	}
-	return &peerRefOutput{ID: id, Name: names[id]}
+	return &refOutput{ID: id, Name: names[id]}
 }
 
 type localFlagsOutput struct {

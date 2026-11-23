@@ -146,10 +146,10 @@ func TestListNetworksTool(t *testing.T) {
 	if len(out.Networks) != 2 || out.Networks[0].ID != "n1" || out.Networks[1].ID != "n2" {
 		t.Fatalf("networks = %+v", out.Networks)
 	}
-	if got := out.Networks[0].Routers; len(got) != 1 || got[0].ID != "r1" || !reflect.DeepEqual(got[0].Peer, &peerRefOutput{ID: "p1", Name: "laptop"}) {
+	if got := out.Networks[0].Routers; len(got) != 1 || got[0].ID != "r1" || !reflect.DeepEqual(got[0].Peer, &refOutput{ID: "p1", Name: "laptop"}) {
 		t.Errorf("n1 routers = %+v", got)
 	}
-	if got := out.Networks[1].Routers; len(got) != 1 || got[0].ID != "r2" || !reflect.DeepEqual(got[0].PeerGroups, []groupOutput{{ID: "g1", Name: "devs"}}) {
+	if got := out.Networks[1].Routers; len(got) != 1 || got[0].ID != "r2" || !reflect.DeepEqual(got[0].PeerGroups, []refOutput{{ID: "g1", Name: "devs"}}) {
 		t.Errorf("n2 routers = %+v", got)
 	}
 	if got := out.Networks[0].Resources; len(got) != 1 || got[0].ID != "x1" || len(got[0].Groups) != 1 {

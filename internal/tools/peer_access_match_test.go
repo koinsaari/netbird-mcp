@@ -411,18 +411,18 @@ func TestToAccessPeerOutput(t *testing.T) {
 			},
 			want: accessPeerOutput{
 				ID: "p1", Name: "laptop", IP: "100.64.0.1", DNSLabel: "laptop.netbird.cloud", Connected: true,
-				Groups: []groupOutput{{ID: "g1", Name: "devs"}, {ID: "g2", Name: "all"}},
+				Groups: []refOutput{{ID: "g1", Name: "devs"}, {ID: "g2", Name: "all"}},
 			},
 		},
 		{
 			name: "nil groups become empty list",
 			in:   netbird.Peer{ID: "p1"},
-			want: accessPeerOutput{ID: "p1", Groups: []groupOutput{}},
+			want: accessPeerOutput{ID: "p1", Groups: []refOutput{}},
 		},
 		{
 			name: "local flags present",
 			in:   netbird.Peer{ID: "p1", LocalFlags: &netbird.PeerLocalFlags{ServerSSHAllowed: &yes}},
-			want: accessPeerOutput{ID: "p1", Groups: []groupOutput{}, LocalFlags: &localFlagsOutput{ServerSSHAllowed: &yes}},
+			want: accessPeerOutput{ID: "p1", Groups: []refOutput{}, LocalFlags: &localFlagsOutput{ServerSSHAllowed: &yes}},
 		},
 	}
 	for _, tt := range tests {

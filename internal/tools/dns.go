@@ -25,7 +25,7 @@ type listDNSInput struct{}
 type listDNSOutput struct {
 	NameserverGroups         []nameserverGroupOutput `json:"nameserver_groups"`
 	Zones                    []dnsZoneOutput         `json:"zones"`
-	DisabledManagementGroups []groupOutput           `json:"disabled_management_groups"`
+	DisabledManagementGroups []refOutput             `json:"disabled_management_groups"`
 	ZonesError               string                  `json:"zones_error,omitempty"`
 	NamesError               string                  `json:"names_error,omitempty"`
 }
@@ -38,7 +38,7 @@ type nameserverGroupOutput struct {
 	Primary              bool               `json:"primary"`
 	Domains              []string           `json:"domains"`
 	SearchDomainsEnabled bool               `json:"search_domains_enabled"`
-	Groups               []groupOutput      `json:"groups"`
+	Groups               []refOutput        `json:"groups"`
 	Nameservers          []nameserverOutput `json:"nameservers"`
 }
 
@@ -54,7 +54,7 @@ type dnsZoneOutput struct {
 	Domain             string            `json:"domain"`
 	Enabled            bool              `json:"enabled"`
 	EnableSearchDomain bool              `json:"enable_search_domain"`
-	DistributionGroups []groupOutput     `json:"distribution_groups"`
+	DistributionGroups []refOutput       `json:"distribution_groups"`
 	Records            []dnsRecordOutput `json:"records"`
 }
 

@@ -30,19 +30,19 @@ type listPeersOutput struct {
 }
 
 type peerOutput struct {
-	ID               string        `json:"id"`
-	Name             string        `json:"name"`
-	Hostname         string        `json:"hostname"`
-	DNSLabel         string        `json:"dns_label"`
-	IP               string        `json:"ip"`
-	Connected        bool          `json:"connected"`
-	LastSeen         string        `json:"last_seen"`
-	OS               string        `json:"os"`
-	Version          string        `json:"version"`
-	Groups           []groupOutput `json:"groups"`
-	UserID           string        `json:"user_id"`
-	LoginExpired     bool          `json:"login_expired"`
-	ApprovalRequired bool          `json:"approval_required"`
+	ID               string      `json:"id"`
+	Name             string      `json:"name"`
+	Hostname         string      `json:"hostname"`
+	DNSLabel         string      `json:"dns_label"`
+	IP               string      `json:"ip"`
+	Connected        bool        `json:"connected"`
+	LastSeen         string      `json:"last_seen"`
+	OS               string      `json:"os"`
+	Version          string      `json:"version"`
+	Groups           []refOutput `json:"groups"`
+	UserID           string      `json:"user_id"`
+	LoginExpired     bool        `json:"login_expired"`
+	ApprovalRequired bool        `json:"approval_required"`
 }
 
 func listPeers(c peerAPI) (*mcp.Tool, mcp.ToolHandlerFor[listPeersInput, listPeersOutput]) {

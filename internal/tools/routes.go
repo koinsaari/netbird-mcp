@@ -26,21 +26,21 @@ type listRoutesOutput struct {
 }
 
 type routeOutput struct {
-	ID                  string         `json:"id"`
-	NetworkID           string         `json:"network_id"`
-	Description         string         `json:"description,omitempty"`
-	Enabled             bool           `json:"enabled"`
-	NetworkType         string         `json:"network_type"`
-	Network             string         `json:"network,omitempty"`
-	Domains             []string       `json:"domains"`
-	Peer                *peerRefOutput `json:"peer,omitempty"`
-	PeerGroups          []groupOutput  `json:"peer_groups"`
-	Groups              []groupOutput  `json:"groups"`
-	AccessControlGroups []groupOutput  `json:"access_control_groups"`
-	Metric              int            `json:"metric"`
-	Masquerade          bool           `json:"masquerade"`
-	KeepRoute           bool           `json:"keep_route"`
-	SkipAutoApply       bool           `json:"skip_auto_apply"`
+	ID                  string      `json:"id"`
+	NetworkID           string      `json:"network_id"`
+	Description         string      `json:"description,omitempty"`
+	Enabled             bool        `json:"enabled"`
+	NetworkType         string      `json:"network_type"`
+	Network             string      `json:"network,omitempty"`
+	Domains             []string    `json:"domains"`
+	Peer                *refOutput  `json:"peer,omitempty"`
+	PeerGroups          []refOutput `json:"peer_groups"`
+	Groups              []refOutput `json:"groups"`
+	AccessControlGroups []refOutput `json:"access_control_groups"`
+	Metric              int         `json:"metric"`
+	Masquerade          bool        `json:"masquerade"`
+	KeepRoute           bool        `json:"keep_route"`
+	SkipAutoApply       bool        `json:"skip_auto_apply"`
 }
 
 func listRoutes(c listRoutesAPI) (*mcp.Tool, mcp.ToolHandlerFor[listRoutesInput, listRoutesOutput]) {

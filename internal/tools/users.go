@@ -27,17 +27,17 @@ type listUsersOutput struct {
 }
 
 type userOutput struct {
-	ID              string        `json:"id"`
-	Email           string        `json:"email"`
-	Name            string        `json:"name"`
-	Role            string        `json:"role"`
-	Status          string        `json:"status"`
-	LastLogin       string        `json:"last_login,omitempty"`
-	AutoGroups      []groupOutput `json:"auto_groups"`
-	IsServiceUser   bool          `json:"is_service_user"`
-	IsBlocked       bool          `json:"is_blocked"`
-	PendingApproval bool          `json:"pending_approval"`
-	IsCurrent       bool          `json:"is_current,omitempty"`
+	ID              string      `json:"id"`
+	Email           string      `json:"email"`
+	Name            string      `json:"name"`
+	Role            string      `json:"role"`
+	Status          string      `json:"status"`
+	LastLogin       string      `json:"last_login,omitempty"`
+	AutoGroups      []refOutput `json:"auto_groups"`
+	IsServiceUser   bool        `json:"is_service_user"`
+	IsBlocked       bool        `json:"is_blocked"`
+	PendingApproval bool        `json:"pending_approval"`
+	IsCurrent       bool        `json:"is_current,omitempty"`
 }
 
 func listUsers(c listUsersAPI) (*mcp.Tool, mcp.ToolHandlerFor[listUsersInput, listUsersOutput]) {
